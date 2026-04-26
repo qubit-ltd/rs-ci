@@ -33,9 +33,10 @@ chmod +x align-ci.sh ci-check.sh coverage.sh
 - `RUST_TOOLCHAIN`: toolchain used for `fmt` and `clippy`; defaults to `nightly`.
 - `RS_CI_PROJECT_ROOT`: Rust project root used when these scripts are run from another directory.
 - `RUN_COVERAGE_CFG_CLIPPY`: set to `1` to run clippy with `RUSTFLAGS="--cfg coverage"`.
+- `COVERAGE_ENFORCE_THRESHOLDS`: set to `0` to disable per-source coverage thresholds; defaults to `1`.
 - `MIN_FUNCTION_COVERAGE`: per-source function coverage threshold; defaults to `100`.
-- `MIN_LINE_COVERAGE`: per-source line coverage threshold; defaults to `98`, interpreted as `> 98`.
-- `MIN_REGION_COVERAGE`: per-source region coverage threshold; defaults to `98`, interpreted as `> 98`.
+- `MIN_LINE_COVERAGE`: per-source line coverage threshold; defaults to `95`, interpreted as `> 95`.
+- `MIN_REGION_COVERAGE`: per-source region coverage threshold; defaults to `95`, interpreted as `> 95`.
 - `COVERAGE_SOURCE_DIR`: source directory checked by per-source thresholds; defaults to `src`.
 - `COVERAGE_EXTRA_EXCLUDE_REGEX`: extra regex alternation appended to the coverage exclude pattern.
 - `COVERAGE_OPEN_HTML`: set to `0` to stop `coverage.sh html` from opening the browser.

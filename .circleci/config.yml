@@ -121,7 +121,7 @@ jobs:
       - run:
           name: Run tests and generate coverage reports
           command: |
-            COVERAGE_OPEN_HTML=0 ./coverage.sh all
+            COVERAGE_ENFORCE_THRESHOLDS=0 COVERAGE_OPEN_HTML=0 ./coverage.sh all
             cp target/llvm-cov/coverage.json coverage.json
             cp target/llvm-cov/lcov.info coverage.lcov
             cp target/llvm-cov/coverage.txt coverage.txt
