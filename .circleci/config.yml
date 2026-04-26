@@ -219,12 +219,13 @@ jobs:
           name: Install Rust
           command: |
             $ErrorActionPreference = "Stop"
-            if (-not (Get-Command rustc -ErrorAction SilentlyContinue)) {
+            $cargoBin = Join-Path $env:USERPROFILE ".cargo\bin"
+            $env:Path = "$cargoBin;$env:Path"
+            if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
               Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile "rustup-init.exe"
               .\rustup-init.exe -y --default-toolchain stable --profile minimal
               if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             }
-            $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
             rustup default stable
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             rustup component add clippy
