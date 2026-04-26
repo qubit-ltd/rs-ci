@@ -1,0 +1,284 @@
+version: 2.1
+
+orbs:
+  win: circleci/windows@5.0
+
+commands:
+  checkout_https:
+    steps:
+      - run:
+          name: Checkout source via HTTPS
+          command: |
+            git clone "https://github.com/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}.git" .
+            git checkout "$CIRCLE_SHA1"
+
+  checkout_https_windows:
+    steps:
+      - run:
+          name: Checkout source via HTTPS
+          command: |
+            $ErrorActionPreference = "Stop"
+            $repo = "https://github.com/{0}/{1}.git" -f $env:CIRCLE_PROJECT_USERNAME, $env:CIRCLE_PROJECT_REPONAME
+            git clone $repo .
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            git checkout $env:CIRCLE_SHA1
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  restore_cargo_cache:
+    steps:
+      - restore_cache:
+          keys:
+            - v4-cargo-cache-nightly-{{ arch }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}
+            - v4-cargo-cache-nightly-{{ arch }}-{{ checksum "Cargo.toml" }}-
+            - v4-cargo-cache-nightly-{{ arch }}-
+
+  save_cargo_cache:
+    steps:
+      - save_cache:
+          key: v4-cargo-cache-nightly-{{ arch }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}
+          paths:
+            - "~/.cargo/registry/index"
+            - "~/.cargo/registry/cache"
+            - "~/.cargo/git/db"
+            - "target"
+
+  restore_cargo_binstall_cache:
+    steps:
+      - restore_cache:
+          keys:
+            - v1-cargo-binstall-{{ arch }}-v1.10.15
+            - v1-cargo-binstall-{{ arch }}-
+
+  install_cargo_binstall:
+    steps:
+      - run:
+          name: Install cargo-binstall
+          command: |
+            if ! command -v cargo-binstall > /dev/null 2>&1; then
+              curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+            fi
+      - save_cache:
+          key: v1-cargo-binstall-{{ arch }}-v1.10.15
+          paths:
+            - "~/.cargo/bin/cargo-binstall"
+
+jobs:
+  fast_checks:
+    docker:
+      - image: rustlang/rust:nightly
+    steps:
+      - checkout_https
+      - restore_cargo_cache
+      - run:
+          name: Install rustfmt and clippy
+          command: rustup component add rustfmt clippy
+      - run:
+          name: Check code format
+          command: cargo fmt -- --check
+      - run:
+          name: Run clippy
+          command: cargo clippy --all-targets --all-features -- -D warnings
+      - run:
+          name: Run clippy for coverage cfg when enabled
+          command: |
+            if [ "${RUN_COVERAGE_CFG_CLIPPY:-0}" = "1" ]; then
+              RUSTFLAGS="--cfg coverage" cargo clippy --all-targets --all-features -- -D warnings
+            else
+              echo "RUN_COVERAGE_CFG_CLIPPY is not enabled"
+            fi
+      - save_cargo_cache
+
+  build_test_coverage:
+    docker:
+      - image: rustlang/rust:nightly
+    resource_class: medium+
+    steps:
+      - checkout_https
+      - restore_cargo_cache
+      - restore_cargo_binstall_cache
+      - restore_cache:
+          keys:
+            - v1-cargo-binaries-llvm-cov-0.6.21-{{ arch }}
+            - v1-cargo-binaries-llvm-cov-
+      - install_cargo_binstall
+      - run:
+          name: Install cargo-llvm-cov and jq
+          command: |
+            if ! command -v cargo-llvm-cov > /dev/null 2>&1; then
+              cargo binstall cargo-llvm-cov --version 0.6.21 --no-confirm --log-level info
+            fi
+            rustup component add llvm-tools-preview
+            if ! command -v jq > /dev/null 2>&1; then
+              apt-get update
+              apt-get install -y jq
+            fi
+      - run:
+          name: Build project (debug)
+          command: cargo build --verbose
+      - run:
+          name: Run doc tests
+          command: cargo test --doc --verbose
+      - run:
+          name: Run tests and generate coverage reports
+          command: |
+            COVERAGE_OPEN_HTML=0 ./coverage.sh all
+            cp target/llvm-cov/coverage.json coverage.json
+            cp target/llvm-cov/lcov.info coverage.lcov
+            cp target/llvm-cov/coverage.txt coverage.txt
+      - run:
+          name: Display coverage summary
+          command: |
+            echo "================================"
+            echo "Code Coverage Summary"
+            echo "================================"
+            cat coverage.txt
+      - run:
+          name: Upload coverage to Coveralls
+          command: |
+            if [ -n "${COVERALLS_REPO_TOKEN:-}" ]; then
+              curl -sL https://coveralls.io/coveralls-linux.tar.gz | tar -xz
+              ./coveralls report coverage.lcov --repo-token="$COVERALLS_REPO_TOKEN"
+            else
+              echo "COVERALLS_REPO_TOKEN is not set; skipping upload"
+            fi
+      - run:
+          name: Build project (release)
+          command: cargo build --release --verbose
+      - save_cargo_cache
+      - save_cache:
+          key: v1-cargo-binaries-llvm-cov-0.6.21-{{ arch }}
+          paths:
+            - "~/.cargo/bin/cargo-llvm-cov"
+            - "~/.cargo/bin/llvm-cov"
+            - "~/.cargo/bin/llvm-profdata"
+      - store_artifacts:
+          path: coverage.lcov
+      - store_artifacts:
+          path: coverage.txt
+      - store_artifacts:
+          path: coverage.json
+      - store_artifacts:
+          path: target/llvm-cov
+          destination: llvm-cov
+      - persist_to_workspace:
+          root: .
+          paths:
+            - target
+
+  doc:
+    docker:
+      - image: rustlang/rust:nightly
+    steps:
+      - checkout_https
+      - restore_cargo_cache
+      - attach_workspace:
+          at: .
+      - run:
+          name: Generate documentation
+          command: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --verbose
+      - store_artifacts:
+          path: target/doc
+          destination: doc
+
+  security_audit:
+    docker:
+      - image: rustlang/rust:nightly
+    steps:
+      - checkout_https
+      - restore_cargo_cache
+      - restore_cargo_binstall_cache
+      - restore_cache:
+          keys:
+            - v1-cargo-binaries-audit-{{ arch }}-latest
+            - v1-cargo-binaries-audit-{{ arch }}-
+      - install_cargo_binstall
+      - run:
+          name: Install cargo-audit
+          command: |
+            if ! command -v cargo-audit > /dev/null 2>&1; then
+              cargo binstall cargo-audit --no-confirm --log-level info
+            fi
+      - save_cache:
+          key: v1-cargo-binaries-audit-{{ arch }}-latest
+          paths:
+            - "~/.cargo/bin/cargo-audit"
+      - run:
+          name: Run security audit
+          command: cargo audit
+
+  windows_test:
+    executor: win/server-2022
+    steps:
+      - checkout_https_windows
+      - restore_cache:
+          keys:
+            - v1-windows-cargo-cache-{{ arch }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}
+            - v1-windows-cargo-cache-{{ arch }}-{{ checksum "Cargo.toml" }}-
+            - v1-windows-cargo-cache-{{ arch }}-
+      - run:
+          name: Install Rust
+          command: |
+            $ErrorActionPreference = "Stop"
+            if (-not (Get-Command rustc -ErrorAction SilentlyContinue)) {
+              Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile "rustup-init.exe"
+              .\rustup-init.exe -y --default-toolchain stable --profile minimal
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+            $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
+            rustup default stable
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            rustup component add clippy
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            rustc --version
+            cargo --version
+      - run:
+          name: Build and test on Windows
+          command: |
+            $ErrorActionPreference = "Stop"
+            $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
+            cargo test --verbose
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - run:
+          name: Run clippy on Windows
+          command: |
+            $ErrorActionPreference = "Stop"
+            $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
+            cargo clippy --all-targets --all-features -- -D warnings
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - save_cache:
+          key: v1-windows-cargo-cache-{{ arch }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}
+          paths:
+            - "C:\\Users\\circleci\\.cargo\\registry"
+            - "C:\\Users\\circleci\\.cargo\\git"
+            - "target"
+
+workflows:
+  version: 2
+
+  main_pipeline:
+    jobs:
+      - fast_checks
+      - build_test_coverage:
+          requires:
+            - fast_checks
+      - windows_test:
+          requires:
+            - build_test_coverage
+      - doc:
+          requires:
+            - build_test_coverage
+      - security_audit:
+          requires:
+            - build_test_coverage
+
+  nightly_security:
+    triggers:
+      - schedule:
+          cron: "0 0 * * *"
+          filters:
+            branches:
+              only:
+                - main
+                - master
+    jobs:
+      - security_audit
