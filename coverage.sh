@@ -172,7 +172,8 @@ require_command cargo
 require_command cargo-llvm-cov
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-cd "$SCRIPT_DIR"
+PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
+cd "$PROJECT_ROOT"
 
 if [ ! -f Cargo.toml ]; then
     echo "error: Cargo.toml not found in current directory" >&2
@@ -187,7 +188,7 @@ fi
 
 CURRENT_CRATE_DIR=$(pwd)
 CURRENT_CRATE_NAME=$(basename "$CURRENT_CRATE_DIR")
-WORKSPACE_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+WORKSPACE_ROOT=$(cd "$PROJECT_ROOT/.." && pwd)
 EXCLUDE_PATTERN=$(build_exclude_pattern "$CURRENT_CRATE_NAME" "$WORKSPACE_ROOT")
 SOURCE_PREFIX="$CURRENT_CRATE_DIR/$COVERAGE_SOURCE_DIR/"
 

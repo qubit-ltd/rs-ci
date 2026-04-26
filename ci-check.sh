@@ -149,7 +149,8 @@ require_command cargo
 require_command rustup
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-cd "$SCRIPT_DIR"
+PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
+cd "$PROJECT_ROOT"
 
 echo "Starting local CI checks"
 echo ""
@@ -217,7 +218,7 @@ print_step "6/7 Generating and checking JSON coverage report"
 require_command cargo-llvm-cov
 require_command jq
 ensure_llvm_tools
-./coverage.sh json
+RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/coverage.sh" json
 print_success "Coverage report passed thresholds"
 echo ""
 

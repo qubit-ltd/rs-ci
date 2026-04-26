@@ -38,7 +38,8 @@ require_command cargo
 require_command rustup
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-cd "$SCRIPT_DIR"
+PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
+cd "$PROJECT_ROOT"
 
 ensure_toolchain_components
 
@@ -58,7 +59,7 @@ fi
 
 if command -v cargo-llvm-cov > /dev/null 2>&1 && command -v jq > /dev/null 2>&1; then
     echo "==> ./coverage.sh json"
-    ./coverage.sh json
+    RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/coverage.sh" json
 else
     echo "==> skipping ./coverage.sh json because cargo-llvm-cov or jq is not installed"
 fi

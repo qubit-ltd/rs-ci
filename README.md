@@ -31,6 +31,7 @@ chmod +x align-ci.sh ci-check.sh coverage.sh
 ## Tunable Environment Variables
 
 - `RUST_TOOLCHAIN`: toolchain used for `fmt` and `clippy`; defaults to `nightly`.
+- `RS_CI_PROJECT_ROOT`: Rust project root used when these scripts are run from another directory.
 - `RUN_COVERAGE_CFG_CLIPPY`: set to `1` to run clippy with `RUSTFLAGS="--cfg coverage"`.
 - `MIN_FUNCTION_COVERAGE`: per-source function coverage threshold; defaults to `100`.
 - `MIN_LINE_COVERAGE`: per-source line coverage threshold; defaults to `98`, interpreted as `> 98`.
