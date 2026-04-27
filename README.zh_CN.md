@@ -33,7 +33,9 @@ chmod +x align-ci.sh ci-check.sh coverage.sh
 - `RUST_TOOLCHAIN`：`fmt` 和 `clippy` 使用的工具链；默认是 `nightly`。
 - `RS_CI_PROJECT_ROOT`：当这些脚本从其他目录运行时，用它指定 Rust 项目根目录。
 - `RUN_COVERAGE_CFG_CLIPPY`：设为 `1` 时，使用 `RUSTFLAGS="--cfg coverage"` 运行 clippy。
+- `RUN_COVERAGE_IN_ALIGN`：设为 `1` 时，从 `align-ci.sh` 运行 `coverage.sh json`；默认是 `0`。
 - `COVERAGE_ENFORCE_THRESHOLDS`：设为 `0` 时禁用单源码文件覆盖率阈值检查；默认是 `1`。
+- `COVERAGE_ALL_FEATURES`：设为 `0` 时，coverage 使用 Cargo 默认 feature 选择；默认是 `1`。
 - `MIN_FUNCTION_COVERAGE`：单个源码文件的函数覆盖率阈值；默认是 `100`。
 - `MIN_LINE_COVERAGE`：单个源码文件的行覆盖率阈值；默认是 `95`，含义是 `> 95`。
 - `MIN_REGION_COVERAGE`：单个源码文件的 region 覆盖率阈值；默认是 `95`，含义是 `> 95`。

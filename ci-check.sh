@@ -195,8 +195,8 @@ else
 fi
 echo ""
 
-print_step "4/7 Running tests"
-if cargo test --verbose; then
+print_step "4/7 Running tests (cargo test --all-features)"
+if cargo test --all-features --verbose; then
     print_success "All tests passed"
 else
     print_error "Tests failed"

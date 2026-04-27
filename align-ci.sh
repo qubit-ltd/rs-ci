@@ -16,6 +16,7 @@ set -euo pipefail
 
 RUST_TOOLCHAIN="${RUST_TOOLCHAIN:-nightly}"
 RUN_COVERAGE_CFG_CLIPPY="${RUN_COVERAGE_CFG_CLIPPY:-0}"
+RUN_COVERAGE_IN_ALIGN="${RUN_COVERAGE_IN_ALIGN:-0}"
 
 require_command() {
     if ! command -v "$1" > /dev/null 2>&1; then
@@ -57,11 +58,14 @@ if [ "$RUN_COVERAGE_CFG_CLIPPY" = "1" ]; then
     RUSTFLAGS="--cfg coverage" cargo +"$RUST_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
 fi
 
-if command -v cargo-llvm-cov > /dev/null 2>&1 && command -v jq > /dev/null 2>&1; then
+if [ "$RUN_COVERAGE_IN_ALIGN" = "1" ]; then
+    require_command cargo-llvm-cov
+    require_command jq
+
     echo "==> ./coverage.sh json"
     RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/coverage.sh" json
 else
-    echo "==> skipping ./coverage.sh json because cargo-llvm-cov or jq is not installed"
+    echo "==> skipping ./coverage.sh json by default; set RUN_COVERAGE_IN_ALIGN=1 to enable it"
 fi
 
 echo "Done. CI-style checks should pass; run ./ci-check.sh for the full pipeline."
