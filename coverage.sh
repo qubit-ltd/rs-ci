@@ -89,6 +89,73 @@ build_exclude_pattern() {
     printf '%s\n' "$pattern"
 }
 
+shorten_table_path() {
+    local value="$1"
+    local max_length=56
+    local keep_length
+
+    if [ "${#value}" -le "$max_length" ]; then
+        printf '%s\n' "$value"
+        return
+    fi
+
+    keep_length=$((max_length - 3))
+    printf '...%s\n' "${value: -$keep_length}"
+}
+
+print_json_coverage_summary() {
+    local coverage_json="$1"
+    local source_prefix="$2"
+    local rows
+    local file
+    local functions
+    local lines
+    local regions
+    local display_file
+
+    require_command jq
+
+    if [ ! -f "$coverage_json" ]; then
+        echo "error: coverage JSON not found: $coverage_json" >&2
+        exit 1
+    fi
+
+    rows=$(jq -r \
+        --arg source_prefix "$source_prefix" \
+        '
+        def metric($summary):
+            if (($summary.count // 0) == 0) then
+                "n/a"
+            else
+                "\((($summary.percent * 100) | round) / 100)% (\($summary.covered)/\($summary.count))"
+            end;
+
+        .data[].files[]
+        | select(.filename | startswith($source_prefix))
+        | [
+            (.filename | ltrimstr($source_prefix)),
+            metric(.summary.functions),
+            metric(.summary.lines),
+            metric(.summary.regions)
+          ]
+        | @tsv
+        ' "$coverage_json" | sort)
+
+    echo "Coverage summary:"
+    if [ -z "$rows" ]; then
+        echo "  No source files matched prefix: $source_prefix"
+        return
+    fi
+
+    printf '  %-56s %18s %18s %18s\n' "Source" "Functions" "Lines" "Regions"
+    printf '  %-56s %18s %18s %18s\n' "------" "---------" "-----" "-------"
+    while IFS=$'\t' read -r file functions lines regions; do
+        display_file=$(shorten_table_path "$file")
+        printf '  %-56s %18s %18s %18s\n' "$display_file" "$functions" "$lines" "$regions"
+    done <<< "$rows"
+    echo ""
+}
+
 check_json_coverage() {
     local coverage_json="$1"
     local source_prefix="$2"
@@ -136,6 +203,8 @@ check_json_coverage() {
 maybe_check_json_coverage() {
     local coverage_json="$1"
     local source_prefix="$2"
+
+    print_json_coverage_summary "$coverage_json" "$source_prefix"
 
     if [ "$COVERAGE_ENFORCE_THRESHOLDS" = "1" ]; then
         check_json_coverage "$coverage_json" "$source_prefix"
