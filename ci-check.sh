@@ -55,6 +55,22 @@ require_command() {
     fi
 }
 
+require_executable_file() {
+    local file="$1"
+
+    if [ ! -f "$file" ]; then
+        print_error "Required script '$file' was not found"
+        exit 1
+    fi
+    if [ ! -x "$file" ]; then
+        print_error "Required script '$file' is not executable"
+        echo ""
+        echo "Please run:"
+        echo "  chmod +x $file"
+        exit 1
+    fi
+}
+
 ensure_toolchain_components() {
     if ! rustup toolchain list | grep -q "^${RUST_TOOLCHAIN}"; then
         print_warning "Rust toolchain '$RUST_TOOLCHAIN' not found; installing"
@@ -155,7 +171,7 @@ cd "$PROJECT_ROOT"
 echo "Starting local CI checks"
 echo ""
 
-print_step "1/7 Checking code format (cargo +$RUST_TOOLCHAIN fmt)"
+print_step "1/8 Checking code format (cargo +$RUST_TOOLCHAIN fmt)"
 ensure_toolchain_components
 if cargo +"$RUST_TOOLCHAIN" fmt -- --check > /dev/null 2>&1; then
     print_success "Code format check passed"
@@ -168,16 +184,22 @@ else
 fi
 echo ""
 
-print_step "2/7 Running Clippy checks (cargo +$RUST_TOOLCHAIN clippy)"
+print_step "2/8 Running Clippy checks (cargo +$RUST_TOOLCHAIN clippy)"
 run_clippy
 if [ "$RUN_COVERAGE_CFG_CLIPPY" = "1" ]; then
-    print_step "2b/7 Running Clippy checks with RUSTFLAGS=--cfg coverage"
+    print_step "2b/8 Running Clippy checks with RUSTFLAGS=--cfg coverage"
     RUSTFLAGS="--cfg coverage" cargo +"$RUST_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
     print_success "Coverage cfg clippy checks passed"
 fi
 echo ""
 
-print_step "3/7 Building project"
+print_step "3/8 Running Rust style checks"
+require_executable_file "$SCRIPT_DIR/style-check.sh"
+RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/style-check.sh"
+print_success "Rust style checks passed"
+echo ""
+
+print_step "4/8 Building project"
 if cargo build --verbose > /dev/null 2>&1; then
     print_success "Debug build succeeded"
 else
@@ -195,7 +217,7 @@ else
 fi
 echo ""
 
-print_step "4/7 Running tests (cargo test --all-features)"
+print_step "5/8 Running tests (cargo test --all-features)"
 if cargo test --all-features --verbose; then
     print_success "All tests passed"
 else
@@ -204,7 +226,7 @@ else
 fi
 echo ""
 
-print_step "5/7 Building documentation with warnings denied"
+print_step "6/8 Building documentation with warnings denied"
 if RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --verbose > /dev/null 2>&1; then
     print_success "Documentation build passed"
 else
@@ -214,7 +236,7 @@ else
 fi
 echo ""
 
-print_step "6/7 Generating and checking JSON coverage report"
+print_step "7/8 Generating and checking JSON coverage report"
 require_command cargo-llvm-cov
 require_command jq
 ensure_llvm_tools
@@ -222,7 +244,7 @@ RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/coverage.sh" json
 print_success "Coverage report passed thresholds"
 echo ""
 
-print_step "7/7 Running security audit"
+print_step "8/8 Running security audit"
 require_command cargo-audit
 run_security_audit
 echo ""
