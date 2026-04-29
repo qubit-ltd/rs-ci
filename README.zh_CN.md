@@ -41,6 +41,7 @@ chmod +x align-ci.sh ci-check.sh style-check.sh coverage.sh
 - `STYLE_ENFORCE_INLINE_TESTS`：设为 `0` 时允许在源码文件中使用 `#[cfg(test)]` 或 `#[test]`；默认是 `1`。
 - `STYLE_ENFORCE_TEST_FILE_NAMES`：设为 `0` 时关闭测试文件命名检查；默认是 `1`。
 - `STYLE_ENFORCE_PUBLIC_TYPE_FILES`：设为 `0` 时关闭公开类型文件布局检查；默认是 `1`。
+- `STYLE_ENFORCE_EXPLICIT_IMPORTS`：设为 `0` 时允许通配导入和纯聚合型 `mod.rs` 中的私有导入；默认是 `1`。
 - `STYLE_TYPE_VISIBILITY`：文件布局规则检查的类型声明范围，可选 `public` 或 `all`；默认是 `public`。
 - `STYLE_INCLUDE_TYPE_ALIASES`：设为 `1` 时把公开 `type` 别名也纳入文件布局检查；默认是 `0`。
 - `STYLE_EXTRA_EXCLUDE_REGEX`：追加给 `style-check.sh` 的文件排除正则。
