@@ -45,6 +45,7 @@ chmod +x align-ci.sh ci-check.sh style-check.sh coverage.sh
 - `STYLE_TYPE_VISIBILITY`: type declarations checked by file layout rules, either `public` or `all`; defaults to `public`.
 - `STYLE_INCLUDE_TYPE_ALIASES`: set to `1` to include public `type` aliases in file layout checks; defaults to `0`.
 - `STYLE_EXTRA_EXCLUDE_REGEX`: extra regex for files skipped by `style-check.sh`.
+- `STYLE_ALLOWLIST_FILE`: project-level reviewed style exception allowlist; defaults to `<project-root>/.qubit-style-allowlist`.
 - `COVERAGE_ENFORCE_THRESHOLDS`: set to `0` to disable per-source coverage thresholds; defaults to `1`.
 - `COVERAGE_ALL_FEATURES`: set to `0` to use Cargo's default feature selection for coverage; defaults to `1`.
 - `MIN_FUNCTION_COVERAGE`: per-source function coverage threshold; defaults to `100`.
@@ -62,3 +63,7 @@ environment variables instead of editing the scripts for one project only.
 
 Use file-level `qubit-style: allow ...` comments only for deliberate exceptions,
 such as a small public helper type that must stay beside its owner.
+The `multiple-public-types` exception also requires a matching reviewed entry
+in the project-level `STYLE_ALLOWLIST_FILE`; an inline comment alone is not
+accepted for that rule. Keep this file outside `.rs-ci` when `.rs-ci` is a
+shared scripts checkout.

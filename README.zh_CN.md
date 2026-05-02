@@ -45,6 +45,7 @@ chmod +x align-ci.sh ci-check.sh style-check.sh coverage.sh
 - `STYLE_TYPE_VISIBILITY`：文件布局规则检查的类型声明范围，可选 `public` 或 `all`；默认是 `public`。
 - `STYLE_INCLUDE_TYPE_ALIASES`：设为 `1` 时把公开 `type` 别名也纳入文件布局检查；默认是 `0`。
 - `STYLE_EXTRA_EXCLUDE_REGEX`：追加给 `style-check.sh` 的文件排除正则。
+- `STYLE_ALLOWLIST_FILE`：项目级已审核风格例外白名单；默认是 `<project-root>/.qubit-style-allowlist`。
 - `COVERAGE_ENFORCE_THRESHOLDS`：设为 `0` 时禁用单源码文件覆盖率阈值检查；默认是 `1`。
 - `COVERAGE_ALL_FEATURES`：设为 `0` 时，coverage 使用 Cargo 默认 feature 选择；默认是 `1`。
 - `MIN_FUNCTION_COVERAGE`：单个源码文件的函数覆盖率阈值；默认是 `100`。
@@ -60,3 +61,5 @@ chmod +x align-ci.sh ci-check.sh style-check.sh coverage.sh
 项目特有行为应该通过环境变量配置，而不是只为某一个项目直接修改脚本。
 
 文件级 `qubit-style: allow ...` 注释只应用于明确的例外情况，例如必须和主体类型放在一起的轻量公开辅助类型。
+其中 `multiple-public-types` 例外还必须在项目级 `STYLE_ALLOWLIST_FILE` 中存在对应的已审核记录；仅有源码内联注释不会被这条规则接受。
+当 `.rs-ci` 是共享脚本仓库 checkout 时，应把该文件放在项目根目录，而不是 `.rs-ci` 内。
