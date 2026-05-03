@@ -136,6 +136,10 @@ jobs:
           name: Upload coverage to Coveralls
           command: |
             if [ -n "${COVERALLS_REPO_TOKEN:-}" ]; then
+              if [ ! -s coverage.lcov ]; then
+                echo "coverage.lcov is empty; skipping Coveralls upload"
+                exit 0
+              fi
               curl -sL https://coveralls.io/coveralls-linux.tar.gz | tar -xz
               ./coveralls report coverage.lcov --repo-token="$COVERALLS_REPO_TOKEN"
             else
