@@ -20,6 +20,7 @@ STYLE_ENFORCE_TEST_FILE_NAMES="${STYLE_ENFORCE_TEST_FILE_NAMES:-1}"
 STYLE_ENFORCE_PUBLIC_TYPE_FILES="${STYLE_ENFORCE_PUBLIC_TYPE_FILES:-1}"
 STYLE_ENFORCE_EXPLICIT_IMPORTS="${STYLE_ENFORCE_EXPLICIT_IMPORTS:-1}"
 STYLE_ENFORCE_AGGREGATION_FILES="${STYLE_ENFORCE_AGGREGATION_FILES:-1}"
+STYLE_ENFORCE_COVERAGE_CFG="${STYLE_ENFORCE_COVERAGE_CFG:-1}"
 STYLE_TYPE_VISIBILITY="${STYLE_TYPE_VISIBILITY:-public}"
 STYLE_INCLUDE_TYPE_ALIASES="${STYLE_INCLUDE_TYPE_ALIASES:-0}"
 STYLE_EXTRA_EXCLUDE_REGEX="${STYLE_EXTRA_EXCLUDE_REGEX:-}"
@@ -44,6 +45,7 @@ print_usage() {
     echo "  STYLE_ENFORCE_PUBLIC_TYPE_FILES=${STYLE_ENFORCE_PUBLIC_TYPE_FILES}"
     echo "  STYLE_ENFORCE_EXPLICIT_IMPORTS=${STYLE_ENFORCE_EXPLICIT_IMPORTS}"
     echo "  STYLE_ENFORCE_AGGREGATION_FILES=${STYLE_ENFORCE_AGGREGATION_FILES}"
+    echo "  STYLE_ENFORCE_COVERAGE_CFG=${STYLE_ENFORCE_COVERAGE_CFG}"
     echo "  STYLE_TYPE_VISIBILITY=${STYLE_TYPE_VISIBILITY}      # public or all"
     echo "  STYLE_INCLUDE_TYPE_ALIASES=${STYLE_INCLUDE_TYPE_ALIASES}"
     echo "  STYLE_EXTRA_EXCLUDE_REGEX=${STYLE_EXTRA_EXCLUDE_REGEX}"
@@ -59,10 +61,15 @@ print_usage() {
     echo "  // qubit-style: allow multiple-public-types"
     echo "  // qubit-style: allow type-file-name"
     echo "  // qubit-style: allow explicit-imports"
+    echo "  // qubit-style: allow coverage-cfg"
     echo ""
     echo "The multiple-public-types allow comment also requires a project-level"
     echo "allowlist entry in STYLE_ALLOWLIST_FILE using this format:"
     echo "  multiple-public-types | src/example.rs | Reason for keeping types together"
+    echo ""
+    echo "The coverage-cfg allow comment also requires a project-level"
+    echo "allowlist entry in STYLE_ALLOWLIST_FILE using this format:"
+    echo "  coverage-cfg | src/example.rs | Reason why coverage cfg is unavoidable"
 }
 
 require_command() {
@@ -460,6 +467,52 @@ check_explicit_imports() {
     check_explicit_imports_in_root "$test_root"
 }
 
+scan_coverage_cfg_attributes() {
+    local file="$1"
+
+    awk '
+        /^[[:space:]]*#\[[[:space:]]*cfg[[:space:]]*\([^]]*coverage[^]]*\)[[:space:]]*\]/ {
+            line = $0
+            sub(/^[[:space:]]*/, "", line)
+            print FNR ":" line
+        }
+        /^[[:space:]]*#\[[[:space:]]*cfg_attr[[:space:]]*\([^]]*coverage[^]]*\)[[:space:]]*\]/ {
+            line = $0
+            sub(/^[[:space:]]*/, "", line)
+            print FNR ":" line
+        }
+    ' "$file"
+}
+
+check_coverage_cfg() {
+    local source_root="$1"
+    local file
+    local rel_path
+    local hit
+    local line
+    local attr_text
+
+    [ "$STYLE_ENFORCE_COVERAGE_CFG" = "1" ] || return 0
+    if [ ! -d "$source_root" ]; then
+        echo "warning: source directory '$source_root' does not exist; skipping coverage cfg checks"
+        return 0
+    fi
+
+    while IFS= read -r file; do
+        rel_path="${file#$PROJECT_ROOT/}"
+        is_extra_excluded "$rel_path" && continue
+        has_approved_style_allow "$file" "$rel_path" "coverage-cfg" && continue
+
+        while IFS= read -r hit; do
+            [ -n "$hit" ] || continue
+            line="${hit%%:*}"
+            attr_text="${hit#*:}"
+            report_error "$rel_path" "$line" \
+                "coverage-specific cfg is not allowed in source; found '$attr_text'. Replace coverage-only code with behavior tests, or add both '// qubit-style: allow coverage-cfg' and a reviewed STYLE_ALLOWLIST_FILE entry."
+        done < <(scan_coverage_cfg_attributes "$file")
+    done < <(list_rs_files "$source_root")
+}
+
 main() {
     local arg="${1:-}"
     local script_dir
@@ -506,6 +559,7 @@ main() {
     check_public_type_files "$source_root"
     check_aggregation_files "$source_root" "$test_root"
     check_explicit_imports "$source_root" "$test_root"
+    check_coverage_cfg "$source_root"
 
     echo ""
     if [ "$FAILURES" -gt 0 ]; then
