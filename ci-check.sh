@@ -165,15 +165,21 @@ require_command cargo
 require_command rustup
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+RUSTFMT_CONFIG="${RS_CI_RUSTFMT_CONFIG:-$SCRIPT_DIR/rustfmt.toml}"
 PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
 cd "$PROJECT_ROOT"
+
+if [ ! -f "$RUSTFMT_CONFIG" ]; then
+    print_error "Rustfmt config '$RUSTFMT_CONFIG' was not found"
+    exit 1
+fi
 
 echo "Starting local CI checks"
 echo ""
 
-print_step "1/8 Checking code format (cargo +$RUST_TOOLCHAIN fmt)"
+print_step "1/8 Checking code format (cargo +$RUST_TOOLCHAIN fmt -- --check --config-path $RUSTFMT_CONFIG)"
 ensure_toolchain_components
-if cargo +"$RUST_TOOLCHAIN" fmt -- --check > /dev/null 2>&1; then
+if cargo +"$RUST_TOOLCHAIN" fmt -- --check --config-path "$RUSTFMT_CONFIG" > /dev/null 2>&1; then
     print_success "Code format check passed"
 else
     print_error "Code format check failed"

@@ -10,6 +10,7 @@
 - `ci-check.sh`：本地完整 CI 等价检查脚本。
 - `style-check.sh`：检查 rustfmt 和 clippy 不覆盖的 Rust 源码布局约束。
 - `coverage.sh`：本地覆盖率报告生成和阈值检查脚本。
+- `rustfmt.toml`：本地脚本和 CI 使用的共享 rustfmt 配置。
 - `.circleci/config.yml`：优化后的 CircleCI 模板。
 
 ## 推荐接入方式
@@ -17,7 +18,7 @@
 把这些文件复制到 Rust 项目根目录：
 
 ```bash
-command cp align-ci.sh ci-check.sh style-check.sh coverage.sh <project-root>/
+command cp align-ci.sh ci-check.sh style-check.sh coverage.sh rustfmt.toml <project-root>/
 command cp .circleci/config.yml <project-root>/.circleci/config.yml
 ```
 
@@ -34,6 +35,7 @@ chmod +x align-ci.sh ci-check.sh style-check.sh coverage.sh
 
 - `RUST_TOOLCHAIN`：`fmt` 和 `clippy` 使用的工具链；默认是 `nightly`。
 - `RS_CI_PROJECT_ROOT`：当这些脚本从其他目录运行时，用它指定 Rust 项目根目录。
+- `RS_CI_RUSTFMT_CONFIG`：rustfmt 配置路径；默认是运行中的 CI 脚本所在目录旁的 `rustfmt.toml`。
 - `RUN_COVERAGE_CFG_CLIPPY`：设为 `1` 时，使用 `RUSTFLAGS="--cfg coverage"` 运行 clippy。
 - `RUN_COVERAGE_IN_ALIGN`：设为 `1` 时，从 `align-ci.sh` 运行 `coverage.sh json`；默认是 `0`。
 - `STYLE_SOURCE_DIR`：`style-check.sh` 检查的源码目录；默认是 `src`。

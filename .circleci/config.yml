@@ -74,7 +74,13 @@ jobs:
           command: rustup component add rustfmt clippy
       - run:
           name: Check code format
-          command: cargo fmt -- --check
+          command: |
+            if [ -f .rs-ci/rustfmt.toml ]; then
+              RUSTFMT_CONFIG=.rs-ci/rustfmt.toml
+            else
+              RUSTFMT_CONFIG=rustfmt.toml
+            fi
+            cargo fmt -- --check --config-path "$RUSTFMT_CONFIG"
       - run:
           name: Run clippy
           command: cargo clippy --all-targets --all-features -- -D warnings

@@ -10,6 +10,7 @@ Shared scripts and CircleCI configuration for checking Rust code in CI.
 - `ci-check.sh`: local full CI parity check.
 - `style-check.sh`: project-specific Rust source layout checks that rustfmt and clippy do not cover.
 - `coverage.sh`: local coverage report generator and threshold checker.
+- `rustfmt.toml`: shared rustfmt configuration used by the local scripts and CI.
 - `.circleci/config.yml`: optimized CircleCI template.
 
 ## Recommended Adoption
@@ -17,7 +18,7 @@ Shared scripts and CircleCI configuration for checking Rust code in CI.
 Copy these files into the root of a Rust project:
 
 ```bash
-command cp align-ci.sh ci-check.sh style-check.sh coverage.sh <project-root>/
+command cp align-ci.sh ci-check.sh style-check.sh coverage.sh rustfmt.toml <project-root>/
 command cp .circleci/config.yml <project-root>/.circleci/config.yml
 ```
 
@@ -34,6 +35,7 @@ chmod +x align-ci.sh ci-check.sh style-check.sh coverage.sh
 
 - `RUST_TOOLCHAIN`: toolchain used for `fmt` and `clippy`; defaults to `nightly`.
 - `RS_CI_PROJECT_ROOT`: Rust project root used when these scripts are run from another directory.
+- `RS_CI_RUSTFMT_CONFIG`: rustfmt configuration path; defaults to `rustfmt.toml` beside the running CI script.
 - `RUN_COVERAGE_CFG_CLIPPY`: set to `1` to run clippy with `RUSTFLAGS="--cfg coverage"`.
 - `RUN_COVERAGE_IN_ALIGN`: set to `1` to run `coverage.sh json` from `align-ci.sh`; defaults to `0`.
 - `STYLE_SOURCE_DIR`: source directory checked by `style-check.sh`; defaults to `src`.

@@ -39,13 +39,19 @@ require_command cargo
 require_command rustup
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+RUSTFMT_CONFIG="${RS_CI_RUSTFMT_CONFIG:-$SCRIPT_DIR/rustfmt.toml}"
 PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
 cd "$PROJECT_ROOT"
 
+if [ ! -f "$RUSTFMT_CONFIG" ]; then
+    echo "error: rustfmt config '$RUSTFMT_CONFIG' was not found" >&2
+    exit 1
+fi
+
 ensure_toolchain_components
 
-echo "==> cargo +$RUST_TOOLCHAIN fmt"
-cargo +"$RUST_TOOLCHAIN" fmt
+echo "==> cargo +$RUST_TOOLCHAIN fmt -- --config-path $RUSTFMT_CONFIG"
+cargo +"$RUST_TOOLCHAIN" fmt -- --config-path "$RUSTFMT_CONFIG"
 
 echo "==> cargo +$RUST_TOOLCHAIN clippy --fix (all targets / features)"
 cargo +"$RUST_TOOLCHAIN" clippy --fix --allow-dirty --allow-staged --all-targets --all-features
