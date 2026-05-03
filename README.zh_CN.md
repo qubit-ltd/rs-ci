@@ -42,6 +42,7 @@ chmod +x align-ci.sh ci-check.sh style-check.sh coverage.sh
 - `STYLE_ENFORCE_TEST_FILE_NAMES`：设为 `0` 时关闭测试文件命名检查；默认是 `1`。
 - `STYLE_ENFORCE_PUBLIC_TYPE_FILES`：设为 `0` 时关闭公开类型文件布局检查；默认是 `1`。
 - `STYLE_ENFORCE_EXPLICIT_IMPORTS`：设为 `0` 时允许通配导入和纯聚合型 `mod.rs` 中的私有导入；默认是 `1`。
+- `STYLE_ENFORCE_AGGREGATION_FILES`：设为 `0` 时允许 `lib.rs` 和 `mod.rs` 定义结构体、trait、函数、impl 或宏等具体条目；默认是 `1`。
 - `STYLE_TYPE_VISIBILITY`：文件布局规则检查的类型声明范围，可选 `public` 或 `all`；默认是 `public`。
 - `STYLE_INCLUDE_TYPE_ALIASES`：设为 `1` 时把公开 `type` 别名也纳入文件布局检查；默认是 `0`。
 - `STYLE_EXTRA_EXCLUDE_REGEX`：追加给 `style-check.sh` 的文件排除正则。
@@ -63,3 +64,5 @@ chmod +x align-ci.sh ci-check.sh style-check.sh coverage.sh
 文件级 `qubit-style: allow ...` 注释只应用于明确的例外情况，例如必须和主体类型放在一起的轻量公开辅助类型。
 其中 `multiple-public-types` 例外还必须在项目级 `STYLE_ALLOWLIST_FILE` 中存在对应的已审核记录；仅有源码内联注释不会被这条规则接受。
 当 `.rs-ci` 是共享脚本仓库 checkout 时，应把该文件放在项目根目录，而不是 `.rs-ci` 内。
+
+`lib.rs` 和 `mod.rs` 会被视为聚合文件，只应声明模块并重导出条目；结构体、trait、函数、impl、宏等具体定义应放到专门的源码文件中。

@@ -19,6 +19,7 @@ STYLE_ENFORCE_INLINE_TESTS="${STYLE_ENFORCE_INLINE_TESTS:-1}"
 STYLE_ENFORCE_TEST_FILE_NAMES="${STYLE_ENFORCE_TEST_FILE_NAMES:-1}"
 STYLE_ENFORCE_PUBLIC_TYPE_FILES="${STYLE_ENFORCE_PUBLIC_TYPE_FILES:-1}"
 STYLE_ENFORCE_EXPLICIT_IMPORTS="${STYLE_ENFORCE_EXPLICIT_IMPORTS:-1}"
+STYLE_ENFORCE_AGGREGATION_FILES="${STYLE_ENFORCE_AGGREGATION_FILES:-1}"
 STYLE_TYPE_VISIBILITY="${STYLE_TYPE_VISIBILITY:-public}"
 STYLE_INCLUDE_TYPE_ALIASES="${STYLE_INCLUDE_TYPE_ALIASES:-0}"
 STYLE_EXTRA_EXCLUDE_REGEX="${STYLE_EXTRA_EXCLUDE_REGEX:-}"
@@ -42,6 +43,7 @@ print_usage() {
     echo "  STYLE_ENFORCE_TEST_FILE_NAMES=${STYLE_ENFORCE_TEST_FILE_NAMES}"
     echo "  STYLE_ENFORCE_PUBLIC_TYPE_FILES=${STYLE_ENFORCE_PUBLIC_TYPE_FILES}"
     echo "  STYLE_ENFORCE_EXPLICIT_IMPORTS=${STYLE_ENFORCE_EXPLICIT_IMPORTS}"
+    echo "  STYLE_ENFORCE_AGGREGATION_FILES=${STYLE_ENFORCE_AGGREGATION_FILES}"
     echo "  STYLE_TYPE_VISIBILITY=${STYLE_TYPE_VISIBILITY}      # public or all"
     echo "  STYLE_INCLUDE_TYPE_ALIASES=${STYLE_INCLUDE_TYPE_ALIASES}"
     echo "  STYLE_EXTRA_EXCLUDE_REGEX=${STYLE_EXTRA_EXCLUDE_REGEX}"
@@ -345,6 +347,60 @@ has_mod_rs_own_items() {
     ' "$file"
 }
 
+scan_aggregation_file_items() {
+    local file="$1"
+
+    awk '
+        /^[[:space:]]*(pub([[:space:]]*\([^)]*\))?[[:space:]]+)?(async[[:space:]]+fn|fn|struct|enum|trait|type|const|static|impl|macro_rules!)([[:space:]<{!(]|$)/ {
+            line = $0
+            sub(/^[[:space:]]*/, "", line)
+            print FNR ":" line
+        }
+    ' "$file"
+}
+
+is_aggregation_file() {
+    local file="$1"
+    local base_name
+
+    base_name=$(basename "$file")
+    [ "$base_name" = "lib.rs" ] || [ "$base_name" = "mod.rs" ]
+}
+
+check_aggregation_files_in_root() {
+    local root="$1"
+    local file
+    local rel_path
+    local hit
+    local line
+    local item_text
+
+    [ -d "$root" ] || return 0
+
+    while IFS= read -r file; do
+        is_aggregation_file "$file" || continue
+        rel_path="${file#$PROJECT_ROOT/}"
+        is_extra_excluded "$rel_path" && continue
+
+        while IFS= read -r hit; do
+            [ -n "$hit" ] || continue
+            line="${hit%%:*}"
+            item_text="${hit#*:}"
+            report_error "$rel_path" "$line" \
+                "lib.rs and mod.rs files must only declare modules and re-export items; move '$item_text' into a concrete source file"
+        done < <(scan_aggregation_file_items "$file")
+    done < <(list_rs_files "$root")
+}
+
+check_aggregation_files() {
+    local source_root="$1"
+    local test_root="$2"
+
+    [ "$STYLE_ENFORCE_AGGREGATION_FILES" = "1" ] || return 0
+    check_aggregation_files_in_root "$source_root"
+    check_aggregation_files_in_root "$test_root"
+}
+
 scan_private_mod_rs_imports() {
     local file="$1"
 
@@ -448,6 +504,7 @@ main() {
     check_inline_tests "$source_root"
     check_test_file_names "$test_root"
     check_public_type_files "$source_root"
+    check_aggregation_files "$source_root" "$test_root"
     check_explicit_imports "$source_root" "$test_root"
 
     echo ""

@@ -42,6 +42,7 @@ chmod +x align-ci.sh ci-check.sh style-check.sh coverage.sh
 - `STYLE_ENFORCE_TEST_FILE_NAMES`: set to `0` to disable test file naming checks; defaults to `1`.
 - `STYLE_ENFORCE_PUBLIC_TYPE_FILES`: set to `0` to disable public type file layout checks; defaults to `1`.
 - `STYLE_ENFORCE_EXPLICIT_IMPORTS`: set to `0` to allow wildcard imports and aggregation-only `mod.rs` private imports; defaults to `1`.
+- `STYLE_ENFORCE_AGGREGATION_FILES`: set to `0` to allow `lib.rs` and `mod.rs` to define items such as structs, traits, functions, impls, or macros; defaults to `1`.
 - `STYLE_TYPE_VISIBILITY`: type declarations checked by file layout rules, either `public` or `all`; defaults to `public`.
 - `STYLE_INCLUDE_TYPE_ALIASES`: set to `1` to include public `type` aliases in file layout checks; defaults to `0`.
 - `STYLE_EXTRA_EXCLUDE_REGEX`: extra regex for files skipped by `style-check.sh`.
@@ -67,3 +68,7 @@ The `multiple-public-types` exception also requires a matching reviewed entry
 in the project-level `STYLE_ALLOWLIST_FILE`; an inline comment alone is not
 accepted for that rule. Keep this file outside `.rs-ci` when `.rs-ci` is a
 shared scripts checkout.
+
+`lib.rs` and `mod.rs` are treated as aggregation files. They should declare
+modules and re-export items only; concrete item definitions belong in dedicated
+source files.
