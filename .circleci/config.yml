@@ -11,6 +11,8 @@ commands:
           command: |
             git clone "https://github.com/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}.git" .
             git checkout "$CIRCLE_SHA1"
+            git submodule sync --recursive
+            git submodule update --init --recursive
 
   checkout_https_windows:
     steps:
@@ -22,6 +24,10 @@ commands:
             git clone $repo .
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             git checkout $env:CIRCLE_SHA1
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            git submodule sync --recursive
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            git submodule update --init --recursive
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   restore_cargo_cache:
