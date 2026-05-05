@@ -83,6 +83,54 @@ check_test_file_names() {
     done < <(list_rs_files "$test_root")
 }
 
+# Purpose: Scan one Rust test file for source redirections that hide real tests.
+scan_test_redirects() {
+    local file="$1"
+
+    awk '
+        /^[[:space:]]*include![[:space:]]*\(/ {
+            line = $0
+            sub(/^[[:space:]]*/, "", line)
+            print FNR ":include! macro:" line
+        }
+        /^[[:space:]]*#\[[[:space:]]*path[[:space:]]*=/ {
+            line = $0
+            sub(/^[[:space:]]*/, "", line)
+            print FNR ":#[path] attribute:" line
+        }
+    ' "$file"
+}
+
+# Purpose: Enforce that test-pair files contain their concrete test code.
+check_test_redirects() {
+    local test_root="$1"
+    local file
+    local rel_path
+    local hit
+    local line
+    local redirect_kind
+    local redirect_text
+
+    [ "$STYLE_ENFORCE_TEST_REDIRECTS" = "1" ] || return 0
+    [ -d "$test_root" ] || return 0
+
+    while IFS= read -r file; do
+        rel_path="${file#$PROJECT_ROOT/}"
+        is_extra_excluded "$rel_path" && continue
+        [[ "$rel_path" =~ $STYLE_TEST_SUPPORT_DIR_REGEX ]] && continue
+
+        while IFS= read -r hit; do
+            [ -n "$hit" ] || continue
+            line="${hit%%:*}"
+            redirect_kind="${hit#*:}"
+            redirect_kind="${redirect_kind%%:*}"
+            redirect_text="${hit#*:*:}"
+            report_error "$rel_path" "$line" \
+                "test files must contain concrete tests directly; remove $redirect_kind '$redirect_text'"
+        done < <(scan_test_redirects "$file")
+    done < <(list_rs_files "$test_root")
+}
+
 # Purpose: Detect type-alias-only files eligible for test-pair exemption.
 is_type_alias_only_file() {
     local file="$1"
