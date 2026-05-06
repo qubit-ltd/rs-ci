@@ -42,6 +42,7 @@ chmod +x align-ci.sh ci-check.sh style-check.sh coverage.sh
 - `STYLE_TEST_DIR`：`style-check.sh` 检查的测试目录；默认是 `tests`。
 - `STYLE_ENFORCE_INLINE_TESTS`：设为 `0` 时允许在源码文件中使用 `#[cfg(test)]` 或 `#[test]`；默认是 `1`。
 - `STYLE_ENFORCE_TEST_FILE_NAMES`：设为 `0` 时关闭测试文件命名检查；默认是 `1`。
+- `STYLE_ENFORCE_SOURCE_TEST_PAIRS`：设为 `1` 时要求每个具体源码文件都有对应的 `*_tests.rs` 文件；默认是 `0`，因为覆盖率阈值才是测试行为的主要约束。
 - `STYLE_ENFORCE_PUBLIC_TYPE_FILES`：设为 `0` 时关闭公开类型文件布局检查；默认是 `1`。
 - `STYLE_ENFORCE_EXPLICIT_IMPORTS`：设为 `0` 时允许通配导入和纯聚合型 `mod.rs` 中的私有导入；默认是 `1`。
 - `STYLE_ENFORCE_AGGREGATION_FILES`：设为 `0` 时允许 `lib.rs` 和 `mod.rs` 定义结构体、trait、函数、impl 或宏等具体条目；默认是 `1`。
