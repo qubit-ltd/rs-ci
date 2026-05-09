@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-用于在 CI 中检查 Rust 代码的共享脚本和 CircleCI 配置。
+用于在 CI 中检查 Rust 代码的共享脚本和 CircleCI/GitHub Actions 配置。
 
 ## 文件
 
@@ -12,6 +12,7 @@
 - `coverage.sh`：本地覆盖率报告生成和阈值检查脚本。
 - `rustfmt.toml`：本地脚本和 CI 使用的共享 rustfmt 配置。
 - `.circleci/config.yml`：优化后的 CircleCI 模板。
+- `.github/workflows/rust-ci.yml`：可复用的 GitHub Actions workflow。
 
 ## 推荐接入方式
 
@@ -29,6 +30,31 @@ cd <project-root>
 chmod +x align-ci.sh ci-check.sh style-check.sh coverage.sh
 ./style-check.sh
 ./ci-check.sh
+```
+
+如果使用 GitHub Actions，保留本仓库作为 `.rs-ci` submodule，并在 Rust
+项目中添加这个 workflow：
+
+```bash
+mkdir -p .github/workflows
+cat > .github/workflows/ci.yml <<'YAML'
+name: Rust CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  rust-ci:
+    uses: qubit-ltd/rs-ci/.github/workflows/rust-ci.yml@main
+    secrets: inherit
+YAML
 ```
 
 ## 可调环境变量

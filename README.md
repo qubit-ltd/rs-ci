@@ -2,7 +2,7 @@
 
 [中文](README.zh_CN.md)
 
-Shared scripts and CircleCI configuration for checking Rust code in CI.
+Shared scripts and CircleCI/GitHub Actions configuration for checking Rust code in CI.
 
 ## Files
 
@@ -12,6 +12,7 @@ Shared scripts and CircleCI configuration for checking Rust code in CI.
 - `coverage.sh`: local coverage report generator and threshold checker.
 - `rustfmt.toml`: shared rustfmt configuration used by the local scripts and CI.
 - `.circleci/config.yml`: optimized CircleCI template.
+- `.github/workflows/rust-ci.yml`: reusable GitHub Actions workflow.
 
 ## Recommended Adoption
 
@@ -29,6 +30,31 @@ cd <project-root>
 chmod +x align-ci.sh ci-check.sh style-check.sh coverage.sh
 ./style-check.sh
 ./ci-check.sh
+```
+
+For GitHub Actions, keep this repository as the `.rs-ci` submodule and add this
+workflow to the Rust project:
+
+```bash
+mkdir -p .github/workflows
+cat > .github/workflows/ci.yml <<'YAML'
+name: Rust CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  rust-ci:
+    uses: qubit-ltd/rs-ci/.github/workflows/rust-ci.yml@main
+    secrets: inherit
+YAML
 ```
 
 ## Tunable Environment Variables
