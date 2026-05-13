@@ -256,6 +256,16 @@ function isBadgeLine(line) {
   return withoutImages.trim() === "";
 }
 
+function isLanguageReadmeBadge(line, languages) {
+  const match = /^\[!\[[^\]]*]\([^)]+\)]\(([^)]+)\)$/.exec(line.trim());
+  if (!match) {
+    return false;
+  }
+
+  const target = match[1].replace(/^\.\//, "").split("#")[0];
+  return Object.values(languages).some((language) => language.readme === target);
+}
+
 function parseCargoMetadata() {
   const cargoToml = path.join(projectRoot, "Cargo.toml");
   if (!fs.existsSync(cargoToml)) {
@@ -416,6 +426,7 @@ for (const [code, language] of Object.entries(languages)) {
   const prefix = relativePrefix(outputPath);
   const readmeLead = extractReadmeLead(fs.readFileSync(readmePath, "utf8"));
   const readmeHtml = renderMarkdown(readmeLead.body);
+  const heroBadges = readmeLead.badges.filter((badge) => !isLanguageReadmeBadge(badge, languages));
   const values = {
     site: {
       title: siteTitle,
@@ -430,7 +441,7 @@ for (const [code, language] of Object.entries(languages)) {
       links: buildLanguageLinks(languages, code, prefix),
     },
     readme: {
-      badges: readmeLead.badges.map(renderInline).join("\n"),
+      badges: heroBadges.map(renderInline).join("\n"),
       html: readmeHtml,
     },
     coverage: {
