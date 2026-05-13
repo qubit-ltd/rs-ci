@@ -14,7 +14,7 @@
         <div class="nav-links">
           {{{language.links}}}
           {{{coverage.navLink}}}
-          <a href="{{site.githubUrl}}">GitHub</a>
+          <a href="{{site.githubUrl}}">Repository</a>
         </div>
       </nav>
     </header>
@@ -25,23 +25,10 @@
           <h1>{{site.title}}</h1>
           <p>{{site.description}}</p>
         </div>
-        <dl class="status-grid">
-          <div>
-            <dt>CI run</dt>
-            <dd><a href="{{ci.runUrl}}">{{ci.runLabel}}</a></dd>
-          </div>
-          <div>
-            <dt>Coverage</dt>
-            <dd>{{coverage.linePercent}}</dd>
-          </div>
-          <div>
-            <dt>Commit</dt>
-            <dd><a href="{{ci.commitUrl}}">{{ci.shortSha}}</a></dd>
-          </div>
-        </dl>
+        <div class="hero-badges">
+          {{{readme.badges}}}
+        </div>
       </section>
-
-      {{{coverage.panel}}}
 
       <article class="readme-content">
         {{{readme.html}}}

@@ -99,7 +99,7 @@ function parseTable(lines, startIndex) {
 }
 
 function renderMarkdown(markdown) {
-  const lines = stripReadmeLead(markdown).replace(/\r\n/g, "\n").split("\n");
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
   const html = [];
   let paragraph = [];
   let listType = null;
@@ -214,9 +214,10 @@ function renderMarkdown(markdown) {
   return html.join("\n");
 }
 
-function stripReadmeLead(markdown) {
+function extractReadmeLead(markdown) {
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
   let index = 0;
+  const badges = [];
 
   while (index < lines.length && lines[index].trim() === "") {
     index += 1;
@@ -231,6 +232,7 @@ function stripReadmeLead(markdown) {
   }
 
   while (index < lines.length && isBadgeLine(lines[index])) {
+    badges.push(lines[index].trim());
     index += 1;
   }
 
@@ -238,7 +240,10 @@ function stripReadmeLead(markdown) {
     index += 1;
   }
 
-  return lines.slice(index).join("\n");
+  return {
+    badges,
+    body: lines.slice(index).join("\n"),
+  };
 }
 
 function isBadgeLine(line) {
@@ -409,19 +414,8 @@ for (const [code, language] of Object.entries(languages)) {
   const outputPath = language.output || `${code}/index.html`;
   const outputFile = path.join(outputDir, outputPath);
   const prefix = relativePrefix(outputPath);
-  const readmeHtml = renderMarkdown(fs.readFileSync(readmePath, "utf8"));
-  const coveragePanel = config.sections?.coverage === false
-    ? ""
-    : `<section class="coverage-panel">
-        <div>
-          <h2>Coverage report</h2>
-          <p>Line coverage ${escapeHtml(coverage.linePercent)}, functions ${escapeHtml(coverage.functionsPercent)}, regions ${escapeHtml(coverage.regionsPercent)}.</p>
-        </div>
-        <div class="coverage-actions">
-          <a class="button" href="${prefix}coverage/">Open coverage</a>
-          <a class="button secondary" href="${prefix}coverage-badge.json">Badge JSON</a>
-        </div>
-      </section>`;
+  const readmeLead = extractReadmeLead(fs.readFileSync(readmePath, "utf8"));
+  const readmeHtml = renderMarkdown(readmeLead.body);
   const values = {
     site: {
       title: siteTitle,
@@ -436,12 +430,12 @@ for (const [code, language] of Object.entries(languages)) {
       links: buildLanguageLinks(languages, code, prefix),
     },
     readme: {
+      badges: readmeLead.badges.map(renderInline).join("\n"),
       html: readmeHtml,
     },
     coverage: {
       linePercent: coverage.linePercent,
       navLink: config.sections?.coverage === false ? "" : `<a href="${prefix}coverage/">Coverage</a>`,
-      panel: coveragePanel,
     },
     ci: {
       runUrl,
