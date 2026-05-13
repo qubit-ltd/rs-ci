@@ -31,6 +31,13 @@ ensure_toolchain_components() {
         rustup toolchain install "$RUST_TOOLCHAIN"
     fi
 
+    if [ "${RS_CI_SKIP_TOOLCHAIN_UPDATE:-0}" != "1" ]; then
+        echo "==> updating Rust toolchain: $RUST_TOOLCHAIN (align with CI)"
+        if ! rustup toolchain update "$RUST_TOOLCHAIN"; then
+            echo "warning: rustup toolchain update failed; continuing with installed toolchain" >&2
+        fi
+    fi
+
     echo "==> ensuring rustfmt and clippy components for $RUST_TOOLCHAIN"
     rustup component add rustfmt clippy --toolchain "$RUST_TOOLCHAIN"
 }
