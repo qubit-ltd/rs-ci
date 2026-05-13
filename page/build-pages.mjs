@@ -99,7 +99,7 @@ function parseTable(lines, startIndex) {
 }
 
 function renderMarkdown(markdown) {
-  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  const lines = stripReadmeLead(markdown).replace(/\r\n/g, "\n").split("\n");
   const html = [];
   let paragraph = [];
   let listType = null;
@@ -212,6 +212,43 @@ function renderMarkdown(markdown) {
     html.push(`<pre><code class="language-${escapeAttribute(codeLanguage)}">${escapeHtml(codeLines.join("\n"))}</code></pre>`);
   }
   return html.join("\n");
+}
+
+function stripReadmeLead(markdown) {
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  let index = 0;
+
+  while (index < lines.length && lines[index].trim() === "") {
+    index += 1;
+  }
+
+  if (/^#\s+/.test(lines[index]?.trim() || "")) {
+    index += 1;
+  }
+
+  while (index < lines.length && lines[index].trim() === "") {
+    index += 1;
+  }
+
+  while (index < lines.length && isBadgeLine(lines[index])) {
+    index += 1;
+  }
+
+  while (index < lines.length && lines[index].trim() === "") {
+    index += 1;
+  }
+
+  return lines.slice(index).join("\n");
+}
+
+function isBadgeLine(line) {
+  const trimmed = line.trim();
+  if (trimmed === "") {
+    return false;
+  }
+  const withoutLinkedImages = trimmed.replace(/\[!\[[^\]]*]\([^)]+\)]\([^)]+\)/g, "");
+  const withoutImages = withoutLinkedImages.replace(/!\[[^\]]*]\([^)]+\)/g, "");
+  return withoutImages.trim() === "";
 }
 
 function parseCargoMetadata() {

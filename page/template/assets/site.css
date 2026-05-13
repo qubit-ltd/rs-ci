@@ -80,10 +80,10 @@ main {
 }
 
 .hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr);
+  display: flex;
+  flex-direction: column;
   gap: 32px;
-  align-items: end;
+  align-items: stretch;
   padding: 48px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -91,6 +91,10 @@ main {
     linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(14, 165, 233, 0.06) 42%, rgba(255, 255, 255, 0) 70%),
     var(--surface);
   box-shadow: var(--shadow);
+}
+
+.hero-copy {
+  max-width: 820px;
 }
 
 .hero h1 {
@@ -111,6 +115,7 @@ main {
 
 .status-grid {
   display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin: 0;
 }
@@ -303,8 +308,11 @@ pre code {
   }
 
   .hero {
-    grid-template-columns: 1fr;
     padding: 30px 24px;
+  }
+
+  .status-grid {
+    grid-template-columns: 1fr;
   }
 
   .hero h1 {
