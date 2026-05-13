@@ -10,6 +10,7 @@
 - `ci-check.sh`：本地完整 CI 等价检查脚本。
 - `style-check.sh`：检查 rustfmt 和 clippy 不覆盖的 Rust 源码布局约束。
 - `coverage.sh`：本地覆盖率报告生成和阈值检查脚本。
+- `page/`：可复用的 GitHub Pages 构建器、模板、样式和默认配置。
 - `rustfmt.toml`：本地脚本和 CI 使用的共享 rustfmt 配置。
 - `.circleci/config.yml`：优化后的 CircleCI 模板。
 - `.github/workflows/rust-ci.yml`：可复用的 GitHub Actions workflow。
@@ -49,13 +50,58 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
+  pages: write
+  id-token: write
 
 jobs:
   rust-ci:
     uses: qubit-ltd/rs-ci/.github/workflows/rust-ci.yml@main
-    secrets: inherit
 YAML
 ```
+
+在 Rust 项目的 README 中加入 CI 和 coverage badge：
+
+```markdown
+[![Rust CI](https://github.com/<owner>/<repo>/actions/workflows/ci.yml/badge.svg)](https://github.com/<owner>/<repo>/actions/workflows/ci.yml)
+![Coverage](https://img.shields.io/endpoint?url=https://<owner>.github.io/<repo>/coverage-badge.json)
+```
+
+## GitHub Actions 覆盖率输出
+
+可复用 workflow 保留现有格式化、clippy、debug build、doc test、test、release
+build、文档、审计和 Windows 检查。覆盖率通过 `coverage.sh all` 生成，工具是
+`cargo-llvm-cov`，由 `taiki-e/install-action` 安装。CI 中设置
+`COVERAGE_ENFORCE_THRESHOLDS=0`，初始接入阶段只报告覆盖率，不因阈值失败。
+覆盖率发布只使用 GitHub Actions summary、comment 和 artifact，不需要 Codecov 或
+Coveralls token。
+
+调用方 workflow 使用 `push`、`pull_request` 或 `workflow_dispatch` 触发时，
+coverage job 会写出 `lcov.info`、`target/llvm-cov/html` 下的 HTML 报告、
+`coverage-badge.json` 和 Markdown summary。这些文件会上传到
+`coverage-reports` artifact，同一份摘要也会写入 GitHub Actions job summary。
+
+同仓库 pull request 在 `GITHUB_TOKEN` 具备 `pull-requests: write` 权限时会收到
+可更新的 coverage comment。来自 fork 的 PR 或受限 token 仍保留 job summary 和
+artifact，comment 步骤不会阻塞 CI。
+
+workflow 不会自动提交生成的覆盖率文件。默认分支 `push` 会构建 Pages 站点，并通过
+GitHub Pages Actions 部署。pull request 和非默认分支只上传 `pages-preview`
+artifact。
+
+## GitHub Pages 站点
+
+把仓库 Pages source 设为 **GitHub Actions**。默认分支 `push` 部署会发布：
+
+- `index.html`：由 `README.md` 渲染。
+- `zh_CN/index.html`：存在 `README.zh_CN.md` 时由它渲染。
+- `coverage/index.html`：由 `cargo-llvm-cov` 生成的 HTML 报告。
+- `coverage-badge.json`：Shields.io endpoint 数据。
+- `ci-summary.json`：生成站点使用的 CI 元数据。
+
+站点构建器位于 `page/build-pages.mjs`，并读取 `page/default-config.json`。
+项目可以在根目录放置 `.rs-ci-page.json` 覆盖默认配置。构建器只使用 Node.js
+内置模块，项目不需要 npm 包管理器或前端依赖安装。
 
 ## 可调环境变量
 

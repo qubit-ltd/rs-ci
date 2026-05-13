@@ -1,0 +1,24 @@
+{
+  "siteTitle": null,
+  "defaultLanguage": "en",
+  "languages": {
+    "en": {
+      "readme": "README.md",
+      "output": "index.html",
+      "label": "English"
+    },
+    "zh_CN": {
+      "readme": "README.zh_CN.md",
+      "output": "zh_CN/index.html",
+      "label": "中文"
+    }
+  },
+  "sections": {
+    "coverage": true,
+    "ciStatus": true,
+    "rustdoc": false
+  },
+  "theme": {
+    "accentColor": "#2563eb"
+  }
+}

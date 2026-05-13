@@ -21,6 +21,9 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
+  pages: write
+  id-token: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -107,42 +110,19 @@ jobs:
             ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
             ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-
 
-      - name: Restore cargo-binstall cache
-        uses: actions/cache@v5
-        with:
-          path: ~/.cargo/bin/cargo-binstall
-          key: ${{ runner.os }}-cargo-binstall-v1.10.15
-          restore-keys: |
-            ${{ runner.os }}-cargo-binstall-
-
-      - name: Restore cargo-llvm-cov cache
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cargo/bin/cargo-llvm-cov
-            ~/.cargo/bin/llvm-cov
-            ~/.cargo/bin/llvm-profdata
-          key: ${{ runner.os }}-cargo-binaries-llvm-cov-${{ env.CARGO_LLVM_COV_VERSION }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-binaries-llvm-cov-
-
       - name: Install Rust toolchain
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
           rustup component add llvm-tools-preview --toolchain "$RUST_TOOLCHAIN"
           rustup default "$RUST_TOOLCHAIN"
 
-      - name: Install cargo-binstall
-        run: |
-          if ! command -v cargo-binstall > /dev/null 2>&1; then
-            curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-          fi
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov@${{ env.CARGO_LLVM_COV_VERSION }}
 
-      - name: Install cargo-llvm-cov and jq
+      - name: Install jq
         run: |
-          if ! command -v cargo-llvm-cov > /dev/null 2>&1; then
-            cargo binstall cargo-llvm-cov --version "$CARGO_LLVM_COV_VERSION" --no-confirm --log-level info
-          fi
           if ! command -v jq > /dev/null 2>&1; then
             sudo apt-get update
             sudo apt-get install -y jq
@@ -158,30 +138,127 @@ jobs:
         run: |
           COVERAGE_ENFORCE_THRESHOLDS=0 COVERAGE_OPEN_HTML=0 ./coverage.sh all
           cp target/llvm-cov/coverage.json coverage.json
-          cp target/llvm-cov/lcov.info coverage.lcov
+          cp target/llvm-cov/lcov.info lcov.info
           cp target/llvm-cov/coverage.txt coverage.txt
 
-      - name: Display coverage summary
+      - name: Generate coverage summary and badge endpoint
+        id: coverage
         run: |
-          echo "================================"
-          echo "Code Coverage Summary"
-          echo "================================"
-          cat coverage.txt
+          set -euo pipefail
 
-      - name: Upload coverage to Coveralls
-        env:
-          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
-        run: |
-          if [ -n "$COVERALLS_REPO_TOKEN" ]; then
-            if [ ! -s coverage.lcov ]; then
-              echo "coverage.lcov is empty; skipping Coveralls upload"
-              exit 0
-            fi
-            curl -sL https://coveralls.io/coveralls-linux.tar.gz | tar -xz
-            ./coveralls report coverage.lcov --repo-token="$COVERALLS_REPO_TOKEN"
-          else
-            echo "COVERALLS_REPO_TOKEN is not set; skipping upload"
+          line_count=$(jq -r '[.data[].totals.lines.count // 0] | if length == 0 then 0 else add end' coverage.json)
+          line_covered=$(jq -r '[.data[].totals.lines.covered // 0] | if length == 0 then 0 else add end' coverage.json)
+          line_percent=$(jq -n \
+            --argjson covered "$line_covered" \
+            --argjson count "$line_count" \
+            'if $count == 0 then 0 else ($covered * 100 / $count) end')
+          line_percent_text=$(printf "%.2f%%" "$line_percent")
+          line_percent_whole=$(printf "%.0f" "$line_percent")
+
+          if [ "$line_count" = "0" ]; then
+            line_percent_text="n/a"
+            line_percent_whole=0
           fi
+
+          if [ "$line_percent_whole" -ge 90 ]; then
+            badge_color="#4c1"
+          elif [ "$line_percent_whole" -ge 80 ]; then
+            badge_color="#97ca00"
+          elif [ "$line_percent_whole" -ge 70 ]; then
+            badge_color="#dfb317"
+          elif [ "$line_percent_whole" -ge 60 ]; then
+            badge_color="#fe7d37"
+          else
+            badge_color="#e05d44"
+          fi
+
+          cat > coverage-badge.json <<JSON
+          {
+            "schemaVersion": 1,
+            "label": "coverage",
+            "message": "$line_percent_text",
+            "color": "${badge_color#\#}"
+          }
+          JSON
+
+          {
+            echo "## Code coverage"
+            echo ""
+            echo "| Metric | Covered | Total | Coverage |"
+            echo "| --- | ---: | ---: | ---: |"
+            jq -r '
+              def pct($covered; $count):
+                if $count == 0 then
+                  "n/a"
+                else
+                  "\(((($covered * 10000 / $count) | round) / 100))%"
+                end;
+              reduce .data[] as $item (
+                {fc: 0, fn: 0, lc: 0, ln: 0, rc: 0, rn: 0};
+                .fc += ($item.totals.functions.covered // 0)
+                | .fn += ($item.totals.functions.count // 0)
+                | .lc += ($item.totals.lines.covered // 0)
+                | .ln += ($item.totals.lines.count // 0)
+                | .rc += ($item.totals.regions.covered // 0)
+                | .rn += ($item.totals.regions.count // 0)
+              )
+              | [
+                  "| Functions | \(.fc) | \(.fn) | \(pct(.fc; .fn)) |",
+                  "| Lines | \(.lc) | \(.ln) | \(pct(.lc; .ln)) |",
+                  "| Regions | \(.rc) | \(.rn) | \(pct(.rc; .rn)) |"
+                ][]
+            ' coverage.json
+            echo ""
+            echo "- HTML report: artifact \`coverage-reports\`, path \`target/llvm-cov/html/index.html\`."
+            echo "- LCOV report: artifact \`coverage-reports\`, path \`lcov.info\`."
+            echo "- Shields endpoint: artifact \`coverage-reports\`, path \`coverage-badge.json\`."
+            echo ""
+            echo "<details><summary>Text summary</summary>"
+            echo ""
+            echo '```text'
+            cat coverage.txt
+            echo '```'
+            echo ""
+            echo "</details>"
+          } | tee coverage-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+          echo "line_coverage=$line_percent_text" >> "$GITHUB_OUTPUT"
+
+      - name: Comment coverage on pull request
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: actions/github-script@v7
+        continue-on-error: true
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- rs-ci-coverage-report -->';
+            const body = `${marker}\n${fs.readFileSync('coverage-summary.md', 'utf8')}`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+            const previous = comments.find((comment) =>
+              comment.user.type === 'Bot' && comment.body && comment.body.includes(marker)
+            );
+            if (previous) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: previous.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }
 
       - name: Build project (release)
         run: cargo build --release --verbose
@@ -191,10 +268,81 @@ jobs:
         with:
           name: coverage-reports
           path: |
-            coverage.lcov
+            lcov.info
             coverage.txt
             coverage.json
-            target/llvm-cov
+            coverage-badge.json
+            coverage-summary.md
+            target/llvm-cov/html
+            target/llvm-cov/cobertura.xml
+          retention-days: 14
+          if-no-files-found: error
+
+  build_pages:
+    name: Build GitHub Pages
+    if: ${{ github.event_name != 'schedule' }}
+    runs-on: ubuntu-latest
+    needs:
+      - build_test_coverage
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: coverage-reports
+          path: .coverage-artifacts
+
+      - name: Build Pages site
+        run: |
+          set -euo pipefail
+          if [ -f .rs-ci/page/build-pages.mjs ]; then
+            PAGE_BUILDER=.rs-ci/page/build-pages.mjs
+          else
+            PAGE_BUILDER=page/build-pages.mjs
+          fi
+          COVERAGE_JSON=.coverage-artifacts/coverage.json \
+          COVERAGE_HTML_DIR=.coverage-artifacts/target/llvm-cov/html \
+          RS_CI_PAGES_OUTPUT=public \
+          node "$PAGE_BUILDER"
+
+      - name: Upload Pages preview artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: pages-preview
+          path: public
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Configure GitHub Pages
+        if: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages artifact
+        if: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: public
+
+  deploy_pages:
+    name: Deploy GitHub Pages
+    if: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    runs-on: ubuntu-latest
+    needs:
+      - build_pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
   doc:
     name: Documentation
