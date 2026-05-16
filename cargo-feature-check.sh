@@ -20,7 +20,13 @@ RUST_TOOLCHAIN="${RUST_TOOLCHAIN:-nightly}"
 CONFIG_FILE_NAME="${RS_CI_CARGO_MATRIX_CONFIG:-.rs-ci-cargo-matrix.json}"
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
+if [ -n "${RS_CI_PROJECT_ROOT:-}" ]; then
+    PROJECT_ROOT="$RS_CI_PROJECT_ROOT"
+elif [ "$(basename "$SCRIPT_DIR")" = ".rs-ci" ]; then
+    PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+else
+    PROJECT_ROOT="$SCRIPT_DIR"
+fi
 
 if [[ "$CONFIG_FILE_NAME" = /* ]]; then
     CONFIG_FILE="$CONFIG_FILE_NAME"
