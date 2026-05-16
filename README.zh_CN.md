@@ -8,6 +8,7 @@
 
 - `align-ci.sh`：本地自动修复脚本，用于格式化代码并运行 clippy。
 - `ci-check.sh`：本地完整 CI 等价检查脚本。
+- `cargo-feature-check.sh`：可选的项目声明式 Cargo feature matrix 运行器。
 - `style-check.sh`：检查 rustfmt 和 clippy 不覆盖的 Rust 源码布局约束。
 - `coverage.sh`：本地覆盖率报告生成和阈值检查脚本。
 - `page/`：可复用的 GitHub Pages 构建器、模板、样式和默认配置。
@@ -20,7 +21,7 @@
 把这些文件复制到 Rust 项目根目录：
 
 ```bash
-command cp align-ci.sh ci-check.sh style-check.sh coverage.sh rustfmt.toml <project-root>/
+command cp align-ci.sh ci-check.sh cargo-feature-check.sh style-check.sh coverage.sh rustfmt.toml <project-root>/
 command cp .circleci/config.yml <project-root>/.circleci/config.yml
 ```
 
@@ -28,7 +29,7 @@ command cp .circleci/config.yml <project-root>/.circleci/config.yml
 
 ```bash
 cd <project-root>
-chmod +x align-ci.sh ci-check.sh style-check.sh coverage.sh
+chmod +x align-ci.sh ci-check.sh cargo-feature-check.sh style-check.sh coverage.sh
 ./style-check.sh
 ./ci-check.sh
 ```
@@ -89,6 +90,40 @@ workflow 不会自动提交生成的覆盖率文件。默认分支 `push` 会构
 GitHub Pages Actions 部署。pull request 和非默认分支只上传 `pages-preview`
 artifact。
 
+## Cargo Feature Matrix
+
+默认情况下，CI 保持历史行为：Clippy 和测试使用 `--all-features`，文档构建使用
+Cargo 默认 feature 选择，不额外检查其他 feature 组合。
+
+如果项目需要额外 feature 组合，可以在项目根目录添加
+`.rs-ci-cargo-matrix.json`。可复用 workflow、CircleCI 模板和本地 `ci-check.sh`
+会自动检测这个文件，并在默认 CI 路径之外追加这些检查。
+
+```json
+{
+  "version": 1,
+  "checks": [
+    {
+      "name": "minimal",
+      "commands": ["check", "test", "doc"],
+      "defaultFeatures": false,
+      "features": []
+    },
+    {
+      "name": "source-toml",
+      "commands": ["test", "doc"],
+      "defaultFeatures": false,
+      "features": ["source-toml"]
+    }
+  ]
+}
+```
+
+支持的命令包括 `check`、`build`、`test`、`doc`、`doc-test` 和 `clippy`。
+`defaultFeatures` 默认是 `true`，`features` 默认是空列表，也可以把
+`allFeatures` 设为 `true` 来显式声明 all-features 检查。matrix 由项目声明，
+`rs-ci` 不会尝试从 `Cargo.toml` 自动推断所有有效 feature 组合。
+
 ## GitHub Pages 站点
 
 把仓库 Pages source 设为 **GitHub Actions**。默认分支 `push` 部署会发布：
@@ -108,6 +143,7 @@ artifact。
 - `RUST_TOOLCHAIN`：`fmt` 和 `clippy` 使用的工具链；默认是 `nightly`。
 - `RS_CI_PROJECT_ROOT`：当这些脚本从其他目录运行时，用它指定 Rust 项目根目录。
 - `RS_CI_RUSTFMT_CONFIG`：rustfmt 配置路径；默认是运行中的 CI 脚本所在目录旁的 `rustfmt.toml`。
+- `RS_CI_CARGO_MATRIX_CONFIG`：可选 Cargo feature matrix 配置文件的项目相对路径；默认是 `.rs-ci-cargo-matrix.json`。
 - `RUN_COVERAGE_CFG_CLIPPY`：设为 `1` 时，使用 `RUSTFLAGS="--cfg coverage"` 运行 clippy。
 - `RUN_COVERAGE_IN_ALIGN`：设为 `1` 时，从 `align-ci.sh` 运行 `coverage.sh json`；默认是 `0`。
 - `STYLE_SOURCE_DIR`：`style-check.sh` 检查的源码目录；默认是 `src`。
@@ -124,6 +160,8 @@ artifact。
 - `STYLE_ALLOWLIST_FILE`：项目级已审核风格例外白名单；默认是 `<project-root>/.qubit-style-allowlist`。
 - `COVERAGE_ENFORCE_THRESHOLDS`：设为 `0` 时禁用单源码文件覆盖率阈值检查；默认是 `1`。
 - `COVERAGE_ALL_FEATURES`：设为 `0` 时，coverage 使用 Cargo 默认 feature 选择；默认是 `1`。
+- `COVERAGE_NO_DEFAULT_FEATURES`：与 `COVERAGE_ALL_FEATURES=0` 配合使用，设为 `1` 时 coverage 禁用默认 feature。
+- `COVERAGE_FEATURES`：当 `COVERAGE_ALL_FEATURES=0` 时传给 coverage 的逗号分隔 feature 列表。
 - `MIN_FUNCTION_COVERAGE`：单个源码文件的函数覆盖率阈值；默认是 `100`。
 - `MIN_LINE_COVERAGE`：单个源码文件的行覆盖率阈值；默认是 `95`，含义是 `> 95`。
 - `MIN_REGION_COVERAGE`：单个源码文件的 region 覆盖率阈值；默认是 `95`，含义是 `> 95`。

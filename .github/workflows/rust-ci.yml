@@ -18,6 +18,11 @@ on:
         required: false
         type: string
         default: "0.6.21"
+      cargo_feature_matrix_config:
+        description: Project-relative path to optional Cargo feature matrix config.
+        required: false
+        type: string
+        default: ".rs-ci-cargo-matrix.json"
 
 permissions:
   contents: read
@@ -31,6 +36,7 @@ env:
   RUST_TOOLCHAIN: ${{ inputs.rust_toolchain }}
   RUN_COVERAGE_CFG_CLIPPY: ${{ inputs.run_coverage_cfg_clippy }}
   CARGO_LLVM_COV_VERSION: ${{ inputs.cargo_llvm_cov_version }}
+  RS_CI_CARGO_MATRIX_CONFIG: ${{ inputs.cargo_feature_matrix_config }}
 
 jobs:
   fast_checks:
@@ -83,6 +89,106 @@ jobs:
           else
             echo "RUN_COVERAGE_CFG_CLIPPY is not enabled"
           fi
+
+  prepare_cargo_feature_matrix:
+    name: Prepare Cargo feature matrix
+    if: ${{ github.event_name != 'schedule' }}
+    runs-on: ubuntu-latest
+
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Install jq when feature matrix exists
+        run: |
+          if [ -f "$RS_CI_CARGO_MATRIX_CONFIG" ] && ! command -v jq > /dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y jq
+          fi
+
+      - name: Generate Cargo feature matrix
+        id: matrix
+        run: |
+          set -euo pipefail
+          if [ -x .rs-ci/cargo-feature-check.sh ]; then
+            MATRIX_SCRIPT=.rs-ci/cargo-feature-check.sh
+          elif [ -x ./cargo-feature-check.sh ]; then
+            MATRIX_SCRIPT=./cargo-feature-check.sh
+          else
+            if [ -f "$RS_CI_CARGO_MATRIX_CONFIG" ]; then
+              echo "Cargo feature matrix config exists, but cargo-feature-check.sh was not found" >&2
+              exit 1
+            fi
+            matrix='{"include":[{"index":-1,"name":"no-configured-feature-matrix","enabled":false}]}'
+            echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          matrix=$("$MATRIX_SCRIPT" github-matrix)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  cargo_feature_matrix:
+    name: Cargo feature matrix (${{ matrix.name }})
+    if: ${{ github.event_name != 'schedule' }}
+    runs-on: ubuntu-latest
+    needs:
+      - fast_checks
+      - prepare_cargo_feature_matrix
+
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare_cargo_feature_matrix.outputs.matrix) }}
+
+    steps:
+      - name: No configured Cargo feature matrix
+        if: ${{ matrix.enabled == false }}
+        run: echo "No .rs-ci-cargo-matrix.json found; using the default CI feature behavior."
+
+      - name: Checkout source
+        if: ${{ matrix.enabled == true }}
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Restore cargo cache
+        if: ${{ matrix.enabled == true }}
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-cargo-feature-matrix-${{ env.RUST_TOOLCHAIN }}-${{ matrix.name }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-feature-matrix-${{ env.RUST_TOOLCHAIN }}-${{ matrix.name }}-${{ hashFiles('Cargo.toml') }}-
+            ${{ runner.os }}-cargo-feature-matrix-${{ env.RUST_TOOLCHAIN }}-
+            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-
+
+      - name: Install Rust toolchain
+        if: ${{ matrix.enabled == true }}
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup component add clippy --toolchain "$RUST_TOOLCHAIN"
+          rustup default "$RUST_TOOLCHAIN"
+
+      - name: Install jq
+        if: ${{ matrix.enabled == true }}
+        run: |
+          if ! command -v jq > /dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y jq
+          fi
+
+      - name: Run configured Cargo feature check
+        if: ${{ matrix.enabled == true }}
+        run: .rs-ci/cargo-feature-check.sh run-index "${{ matrix.index }}"
 
   build_test_coverage:
     name: Build, test, and coverage
@@ -285,6 +391,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - build_test_coverage
+      - cargo_feature_matrix
 
     steps:
       - name: Checkout source

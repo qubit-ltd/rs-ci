@@ -131,6 +131,23 @@ jobs:
           name: Run doc tests
           command: cargo test --doc --verbose
       - run:
+          name: Run configured Cargo feature matrix
+          command: |
+            if [ -x .rs-ci/cargo-feature-check.sh ]; then
+              MATRIX_SCRIPT=.rs-ci/cargo-feature-check.sh
+            elif [ -x ./cargo-feature-check.sh ]; then
+              MATRIX_SCRIPT=./cargo-feature-check.sh
+            else
+              config_file="${RS_CI_CARGO_MATRIX_CONFIG:-.rs-ci-cargo-matrix.json}"
+              if [ -f "$config_file" ]; then
+                echo "Cargo feature matrix config exists, but cargo-feature-check.sh was not found" >&2
+                exit 1
+              fi
+              echo "No Cargo feature matrix config found; using the default CI feature behavior."
+              exit 0
+            fi
+            "$MATRIX_SCRIPT" run-all
+      - run:
           name: Run tests and generate coverage reports
           command: |
             COVERAGE_ENFORCE_THRESHOLDS=0 COVERAGE_OPEN_HTML=0 ./coverage.sh all

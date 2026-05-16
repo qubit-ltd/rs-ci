@@ -184,7 +184,7 @@ fi
 echo "Starting local CI checks"
 echo ""
 
-print_step "1/8 Checking code format (cargo +$RUST_TOOLCHAIN fmt -- --check --config-path $RUSTFMT_CONFIG)"
+print_step "1/9 Checking code format (cargo +$RUST_TOOLCHAIN fmt -- --check --config-path $RUSTFMT_CONFIG)"
 ensure_toolchain_components
 if cargo +"$RUST_TOOLCHAIN" fmt -- --check --config-path "$RUSTFMT_CONFIG" > /dev/null 2>&1; then
     print_success "Code format check passed"
@@ -197,22 +197,22 @@ else
 fi
 echo ""
 
-print_step "2/8 Running Clippy checks (cargo +$RUST_TOOLCHAIN clippy)"
+print_step "2/9 Running Clippy checks (cargo +$RUST_TOOLCHAIN clippy)"
 run_clippy
 if [ "$RUN_COVERAGE_CFG_CLIPPY" = "1" ]; then
-    print_step "2b/8 Running Clippy checks with RUSTFLAGS=--cfg coverage"
+    print_step "2b/9 Running Clippy checks with RUSTFLAGS=--cfg coverage"
     RUSTFLAGS="--cfg coverage" cargo +"$RUST_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
     print_success "Coverage cfg clippy checks passed"
 fi
 echo ""
 
-print_step "3/8 Running Rust style checks"
+print_step "3/9 Running Rust style checks"
 require_executable_file "$SCRIPT_DIR/style-check.sh"
 RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/style-check.sh"
 print_success "Rust style checks passed"
 echo ""
 
-print_step "4/8 Building project"
+print_step "4/9 Building project"
 if cargo build --verbose > /dev/null 2>&1; then
     print_success "Debug build succeeded"
 else
@@ -230,7 +230,7 @@ else
 fi
 echo ""
 
-print_step "5/8 Running tests (cargo test --all-features)"
+print_step "5/9 Running tests (cargo test --all-features)"
 if cargo test --all-features --verbose; then
     print_success "All tests passed"
 else
@@ -239,7 +239,7 @@ else
 fi
 echo ""
 
-print_step "6/8 Building documentation with warnings denied"
+print_step "6/9 Building documentation with warnings denied"
 if RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --verbose > /dev/null 2>&1; then
     print_success "Documentation build passed"
 else
@@ -249,7 +249,25 @@ else
 fi
 echo ""
 
-print_step "7/8 Generating and checking JSON coverage report"
+print_step "7/9 Running configured Cargo feature matrix"
+MATRIX_CONFIG_NAME="${RS_CI_CARGO_MATRIX_CONFIG:-.rs-ci-cargo-matrix.json}"
+if [[ "$MATRIX_CONFIG_NAME" = /* ]]; then
+    MATRIX_CONFIG_FILE="$MATRIX_CONFIG_NAME"
+else
+    MATRIX_CONFIG_FILE="$PROJECT_ROOT/$MATRIX_CONFIG_NAME"
+fi
+if [ -x "$SCRIPT_DIR/cargo-feature-check.sh" ]; then
+    RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/cargo-feature-check.sh" run-all
+elif [ -f "$MATRIX_CONFIG_FILE" ]; then
+    print_error "Cargo feature matrix config exists, but cargo-feature-check.sh was not found"
+    exit 1
+else
+    echo "No Cargo feature matrix config found; using the default CI feature behavior."
+fi
+print_success "Configured Cargo feature matrix checks passed"
+echo ""
+
+print_step "8/9 Generating and checking JSON coverage report"
 require_command cargo-llvm-cov
 require_command jq
 ensure_llvm_tools
@@ -257,7 +275,7 @@ RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/coverage.sh" json
 print_success "Coverage report passed thresholds"
 echo ""
 
-print_step "8/8 Running security audit"
+print_step "9/9 Running security audit"
 require_command cargo-audit
 run_security_audit
 echo ""

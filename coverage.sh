@@ -22,10 +22,19 @@ COVERAGE_EXTRA_EXCLUDE_REGEX="${COVERAGE_EXTRA_EXCLUDE_REGEX:-}"
 COVERAGE_OPEN_HTML="${COVERAGE_OPEN_HTML:-1}"
 COVERAGE_ENFORCE_THRESHOLDS="${COVERAGE_ENFORCE_THRESHOLDS:-1}"
 COVERAGE_ALL_FEATURES="${COVERAGE_ALL_FEATURES:-1}"
+COVERAGE_NO_DEFAULT_FEATURES="${COVERAGE_NO_DEFAULT_FEATURES:-0}"
+COVERAGE_FEATURES="${COVERAGE_FEATURES:-}"
 
 COVERAGE_FEATURE_ARGS=()
 if [ "$COVERAGE_ALL_FEATURES" = "1" ]; then
     COVERAGE_FEATURE_ARGS=(--all-features)
+else
+    if [ "$COVERAGE_NO_DEFAULT_FEATURES" = "1" ]; then
+        COVERAGE_FEATURE_ARGS+=(--no-default-features)
+    fi
+    if [ -n "$COVERAGE_FEATURES" ]; then
+        COVERAGE_FEATURE_ARGS+=(--features "$COVERAGE_FEATURES")
+    fi
 fi
 
 print_usage() {
@@ -51,6 +60,8 @@ print_usage() {
     echo "  COVERAGE_OPEN_HTML=${COVERAGE_OPEN_HTML}"
     echo "  COVERAGE_ENFORCE_THRESHOLDS=${COVERAGE_ENFORCE_THRESHOLDS}"
     echo "  COVERAGE_ALL_FEATURES=${COVERAGE_ALL_FEATURES}"
+    echo "  COVERAGE_NO_DEFAULT_FEATURES=${COVERAGE_NO_DEFAULT_FEATURES}"
+    echo "  COVERAGE_FEATURES=${COVERAGE_FEATURES}"
 }
 
 require_command() {
@@ -294,6 +305,8 @@ echo "Coverage source prefix: $SOURCE_PREFIX"
 echo "Exclude pattern: $EXCLUDE_PATTERN"
 if [ "$COVERAGE_ALL_FEATURES" = "1" ]; then
     echo "Cargo features: --all-features"
+elif [ "${#COVERAGE_FEATURE_ARGS[@]}" -gt 0 ]; then
+    echo "Cargo features: ${COVERAGE_FEATURE_ARGS[*]}"
 else
     echo "Cargo features: default feature selection"
 fi

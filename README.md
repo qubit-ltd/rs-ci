@@ -8,6 +8,7 @@ Shared scripts and CircleCI/GitHub Actions configuration for checking Rust code 
 
 - `align-ci.sh`: local auto-fix script for formatting and clippy.
 - `ci-check.sh`: local full CI parity check.
+- `cargo-feature-check.sh`: optional project-declared Cargo feature matrix runner.
 - `style-check.sh`: project-specific Rust source layout checks that rustfmt and clippy do not cover.
 - `coverage.sh`: local coverage report generator and threshold checker.
 - `page/`: reusable GitHub Pages builder, template, styles, and default configuration.
@@ -20,7 +21,7 @@ Shared scripts and CircleCI/GitHub Actions configuration for checking Rust code 
 Copy these files into the root of a Rust project:
 
 ```bash
-command cp align-ci.sh ci-check.sh style-check.sh coverage.sh rustfmt.toml <project-root>/
+command cp align-ci.sh ci-check.sh cargo-feature-check.sh style-check.sh coverage.sh rustfmt.toml <project-root>/
 command cp .circleci/config.yml <project-root>/.circleci/config.yml
 ```
 
@@ -28,7 +29,7 @@ Then run:
 
 ```bash
 cd <project-root>
-chmod +x align-ci.sh ci-check.sh style-check.sh coverage.sh
+chmod +x align-ci.sh ci-check.sh cargo-feature-check.sh style-check.sh coverage.sh
 ./style-check.sh
 ./ci-check.sh
 ```
@@ -92,6 +93,43 @@ The workflow does not auto-commit generated coverage files. Default-branch
 `push` runs build the Pages site and deploy it through GitHub Pages Actions.
 Pull requests and non-default branches upload a `pages-preview` artifact only.
 
+## Cargo Feature Matrix
+
+By default, CI keeps the historical behavior: Clippy and tests run with
+`--all-features`, documentation uses Cargo's default feature selection, and no
+extra feature combinations are checked.
+
+Projects that need additional feature combinations can add
+`.rs-ci-cargo-matrix.json` in the project root. The reusable workflow, CircleCI
+template, and local `ci-check.sh` detect this file and run the configured
+checks in addition to the default CI path.
+
+```json
+{
+  "version": 1,
+  "checks": [
+    {
+      "name": "minimal",
+      "commands": ["check", "test", "doc"],
+      "defaultFeatures": false,
+      "features": []
+    },
+    {
+      "name": "source-toml",
+      "commands": ["test", "doc"],
+      "defaultFeatures": false,
+      "features": ["source-toml"]
+    }
+  ]
+}
+```
+
+Supported commands are `check`, `build`, `test`, `doc`, `doc-test`, and
+`clippy`. `defaultFeatures` defaults to `true`, `features` defaults to an empty
+list, and `allFeatures` can be set to `true` for an explicit all-features entry.
+The matrix is intentionally project-declared; `rs-ci` does not try to infer all
+valid feature combinations from `Cargo.toml`.
+
 ## GitHub Pages Site
 
 Set the repository Pages source to **GitHub Actions**. The default-branch
@@ -114,6 +152,7 @@ installation.
 - `RUST_TOOLCHAIN`: toolchain used for `fmt` and `clippy`; defaults to `nightly`.
 - `RS_CI_PROJECT_ROOT`: Rust project root used when these scripts are run from another directory.
 - `RS_CI_RUSTFMT_CONFIG`: rustfmt configuration path; defaults to `rustfmt.toml` beside the running CI script.
+- `RS_CI_CARGO_MATRIX_CONFIG`: project-relative path to the optional Cargo feature matrix config; defaults to `.rs-ci-cargo-matrix.json`.
 - `RUN_COVERAGE_CFG_CLIPPY`: set to `1` to run clippy with `RUSTFLAGS="--cfg coverage"`.
 - `RUN_COVERAGE_IN_ALIGN`: set to `1` to run `coverage.sh json` from `align-ci.sh`; defaults to `0`.
 - `STYLE_SOURCE_DIR`: source directory checked by `style-check.sh`; defaults to `src`.
@@ -130,6 +169,8 @@ installation.
 - `STYLE_ALLOWLIST_FILE`: project-level reviewed style exception allowlist; defaults to `<project-root>/.qubit-style-allowlist`.
 - `COVERAGE_ENFORCE_THRESHOLDS`: set to `0` to disable per-source coverage thresholds; defaults to `1`.
 - `COVERAGE_ALL_FEATURES`: set to `0` to use Cargo's default feature selection for coverage; defaults to `1`.
+- `COVERAGE_NO_DEFAULT_FEATURES`: set to `1` with `COVERAGE_ALL_FEATURES=0` to disable default features for coverage.
+- `COVERAGE_FEATURES`: comma-separated feature list used by coverage when `COVERAGE_ALL_FEATURES=0`.
 - `MIN_FUNCTION_COVERAGE`: per-source function coverage threshold; defaults to `100`.
 - `MIN_LINE_COVERAGE`: per-source line coverage threshold; defaults to `95`, interpreted as `> 95`.
 - `MIN_REGION_COVERAGE`: per-source region coverage threshold; defaults to `95`, interpreted as `> 95`.
