@@ -9,6 +9,7 @@
 - `align-ci.sh`：本地自动修复脚本，用于格式化代码并运行 clippy。
 - `ci-check.sh`：本地完整 CI 等价检查脚本。
 - `cargo-feature-check.sh`：可选的项目声明式 Cargo feature matrix 运行器。
+- `readme-version-check.py`：README 依赖片段检查脚本，要求当前 crate 使用 `major.minor` 版本。
 - `style-check.sh`：检查 rustfmt 和 clippy 不覆盖的 Rust 源码布局约束。
 - `coverage.sh`：本地覆盖率报告生成和阈值检查脚本。
 - `page/`：可复用的 GitHub Pages 构建器、模板、样式和默认配置。
@@ -21,7 +22,7 @@
 把这些文件复制到 Rust 项目根目录：
 
 ```bash
-command cp align-ci.sh ci-check.sh cargo-feature-check.sh style-check.sh coverage.sh rustfmt.toml <project-root>/
+command cp align-ci.sh ci-check.sh cargo-feature-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
 command cp .circleci/config.yml <project-root>/.circleci/config.yml
 ```
 
@@ -29,7 +30,7 @@ command cp .circleci/config.yml <project-root>/.circleci/config.yml
 
 ```bash
 cd <project-root>
-chmod +x align-ci.sh ci-check.sh cargo-feature-check.sh style-check.sh coverage.sh
+chmod +x align-ci.sh ci-check.sh cargo-feature-check.sh readme-version-check.py style-check.sh coverage.sh
 ./style-check.sh
 ./ci-check.sh
 ```
@@ -70,8 +71,8 @@ YAML
 
 ## GitHub Actions 覆盖率输出
 
-可复用 workflow 保留现有格式化、clippy、debug build、doc test、test、release
-build、文档、审计和 Windows 检查。覆盖率通过 `coverage.sh all` 生成，工具是
+可复用 workflow 保留现有格式化、clippy、debug build、doc test、README 依赖版本、
+test、release build、文档、审计和 Windows 检查。覆盖率通过 `coverage.sh all` 生成，工具是
 `cargo-llvm-cov`，由 `taiki-e/install-action` 安装。CI 中设置
 `COVERAGE_ENFORCE_THRESHOLDS=0`，初始接入阶段只报告覆盖率，不因阈值失败。
 覆盖率发布只使用 GitHub Actions summary、comment 和 artifact，不需要 Codecov 或

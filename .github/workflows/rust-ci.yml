@@ -241,6 +241,18 @@ jobs:
       - name: Run doc tests
         run: cargo test --doc --verbose
 
+      - name: Check README dependency versions
+        run: |
+          set -euo pipefail
+          if [ -x .rs-ci/readme-version-check.py ]; then
+            python3 .rs-ci/readme-version-check.py
+          elif [ -x ./readme-version-check.py ]; then
+            python3 ./readme-version-check.py
+          else
+            echo "readme-version-check.py was not found" >&2
+            exit 1
+          fi
+
       - name: Run tests and generate coverage reports
         run: |
           COVERAGE_ENFORCE_THRESHOLDS=0 COVERAGE_OPEN_HTML=0 ./coverage.sh all
