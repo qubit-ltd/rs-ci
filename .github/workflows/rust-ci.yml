@@ -30,6 +30,10 @@ permissions:
   pages: write
   id-token: write
 
+concurrency:
+  group: ${{ github.repository }}-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   CARGO_TERM_COLOR: always
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -97,6 +101,7 @@ jobs:
 
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
+      has_matrix: ${{ steps.matrix.outputs.has_matrix }}
 
     steps:
       - name: Checkout source
@@ -116,25 +121,27 @@ jobs:
         id: matrix
         run: |
           set -euo pipefail
+          if [ ! -f "$RS_CI_CARGO_MATRIX_CONFIG" ]; then
+            matrix='{"include":[{"index":-1,"name":"no-configured-feature-matrix","enabled":false}]}'
+            echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+            echo "has_matrix=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [ -x .rs-ci/cargo-feature-check.sh ]; then
             MATRIX_SCRIPT=.rs-ci/cargo-feature-check.sh
           elif [ -x ./cargo-feature-check.sh ]; then
             MATRIX_SCRIPT=./cargo-feature-check.sh
           else
-            if [ -f "$RS_CI_CARGO_MATRIX_CONFIG" ]; then
-              echo "Cargo feature matrix config exists, but cargo-feature-check.sh was not found" >&2
-              exit 1
-            fi
-            matrix='{"include":[{"index":-1,"name":"no-configured-feature-matrix","enabled":false}]}'
-            echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "Cargo feature matrix config exists, but cargo-feature-check.sh was not found" >&2
+            exit 1
           fi
           matrix=$("$MATRIX_SCRIPT" github-matrix)
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "has_matrix=true" >> "$GITHUB_OUTPUT"
 
   cargo_feature_matrix:
     name: Cargo feature matrix (${{ matrix.name }})
-    if: ${{ github.event_name != 'schedule' }}
+    if: ${{ github.event_name != 'schedule' && needs.prepare_cargo_feature_matrix.outputs.has_matrix == 'true' }}
     runs-on: ubuntu-latest
     needs:
       - fast_checks
@@ -380,6 +387,7 @@ jobs:
             }
 
       - name: Build project (release)
+        if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)) }}
         run: cargo build --release --verbose
 
       - name: Upload coverage artifacts
@@ -399,7 +407,7 @@ jobs:
 
   build_pages:
     name: Build GitHub Pages
-    if: ${{ github.event_name != 'schedule' }}
+    if: ${{ always() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && needs.build_test_coverage.result == 'success' && (needs.cargo_feature_matrix.result == 'success' || needs.cargo_feature_matrix.result == 'skipped') }}
     runs-on: ubuntu-latest
     needs:
       - build_test_coverage
@@ -431,20 +439,10 @@ jobs:
           RS_CI_PAGES_OUTPUT=public \
           node "$PAGE_BUILDER"
 
-      - name: Upload Pages preview artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: pages-preview
-          path: public
-          retention-days: 14
-          if-no-files-found: error
-
       - name: Configure GitHub Pages
-        if: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
         uses: actions/configure-pages@v6
 
       - name: Upload GitHub Pages artifact
-        if: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
         uses: actions/upload-pages-artifact@v5
         with:
           path: public
@@ -469,7 +467,7 @@ jobs:
     if: ${{ github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     needs:
-      - build_test_coverage
+      - fast_checks
 
     steps:
       - name: Checkout source
@@ -507,10 +505,10 @@ jobs:
 
   security_audit:
     name: Security audit
-    if: ${{ always() && (github.event_name == 'schedule' || needs.build_test_coverage.result == 'success') && (github.event_name != 'schedule' || github.ref_name == 'main' || github.ref_name == 'master') }}
+    if: ${{ always() && (github.event_name == 'schedule' || needs.fast_checks.result == 'success') && (github.event_name != 'schedule' || github.ref_name == 'main' || github.ref_name == 'master') }}
     runs-on: ubuntu-latest
     needs:
-      - build_test_coverage
+      - fast_checks
 
     steps:
       - name: Checkout source
@@ -573,7 +571,7 @@ jobs:
     if: ${{ github.event_name != 'schedule' }}
     runs-on: windows-2022
     needs:
-      - build_test_coverage
+      - fast_checks
 
     steps:
       - name: Checkout source
@@ -612,18 +610,18 @@ jobs:
           rustc --version
           cargo --version
 
-      - name: Build and test on Windows
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
-          cargo test --verbose
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
       - name: Run clippy on Windows
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
           $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
           cargo clippy --all-targets --all-features -- -D warnings
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build and test on Windows
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
+          cargo test --verbose
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

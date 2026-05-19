@@ -176,7 +176,12 @@ jobs:
             fi
       - run:
           name: Build project (release)
-          command: cargo build --release --verbose
+          command: |
+            if [ -n "${CIRCLE_PULL_REQUEST:-}" ]; then
+              echo "Skipping release build for pull request"
+              exit 0
+            fi
+            cargo build --release --verbose
       - save_cargo_cache
       - save_cache:
           key: v1-cargo-binaries-llvm-cov-0.6.21-{{ arch }}
@@ -266,18 +271,18 @@ jobs:
             rustc --version
             cargo --version
       - run:
-          name: Build and test on Windows
-          command: |
-            $ErrorActionPreference = "Stop"
-            $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
-            cargo test --verbose
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - run:
           name: Run clippy on Windows
           command: |
             $ErrorActionPreference = "Stop"
             $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
             cargo clippy --all-targets --all-features -- -D warnings
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - run:
+          name: Build and test on Windows
+          command: |
+            $ErrorActionPreference = "Stop"
+            $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
+            cargo test --verbose
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - save_cache:
           key: v1-windows-cargo-cache-{{ arch }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}
@@ -297,13 +302,13 @@ workflows:
             - fast_checks
       - windows_test:
           requires:
-            - build_test_coverage
+            - fast_checks
       - doc:
           requires:
-            - build_test_coverage
+            - fast_checks
       - security_audit:
           requires:
-            - build_test_coverage
+            - fast_checks
 
   nightly_security:
     triggers:
