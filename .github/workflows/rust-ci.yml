@@ -449,7 +449,7 @@ jobs:
 
   deploy_pages:
     name: Deploy GitHub Pages
-    if: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    if: ${{ always() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && needs.build_pages.result == 'success' }}
     runs-on: ubuntu-latest
     needs:
       - build_pages
