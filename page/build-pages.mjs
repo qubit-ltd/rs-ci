@@ -68,6 +68,58 @@ function renderInline(value) {
   return html;
 }
 
+function isCjkTextBoundary(value) {
+  return /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\u3000-\u303f\uff00-\uffef]/u.test(value);
+}
+
+function boundaryCharacter(value, fromEnd) {
+  const chars = Array.from(value.trim());
+  if (chars.length === 0) {
+    return "";
+  }
+  return fromEnd ? chars[chars.length - 1] : chars[0];
+}
+
+function softLineSeparator(left, right) {
+  const leftBoundary = boundaryCharacter(left, true);
+  const rightBoundary = boundaryCharacter(right, false);
+  if (leftBoundary === "" || rightBoundary === "") {
+    return "";
+  }
+  return isCjkTextBoundary(leftBoundary) && isCjkTextBoundary(rightBoundary) ? "" : " ";
+}
+
+function joinSoftLines(parts) {
+  return parts.reduce((result, part) => {
+    const trimmed = part.trim();
+    if (trimmed === "") {
+      return result;
+    }
+    if (result === "") {
+      return trimmed;
+    }
+    return `${result}${softLineSeparator(result, trimmed)}${trimmed}`;
+  }, "");
+}
+
+function collectListItem(lines, startIndex, firstLineText) {
+  const parts = [firstLineText];
+  let index = startIndex + 1;
+  while (index < lines.length) {
+    const line = lines[index];
+    const trimmed = line.trim();
+    if (trimmed === "" || !/^\s+\S/.test(line)) {
+      break;
+    }
+    parts.push(trimmed);
+    index += 1;
+  }
+  return {
+    text: joinSoftLines(parts),
+    nextIndex: index,
+  };
+}
+
 function parseTable(lines, startIndex) {
   const headerLine = lines[startIndex];
   const separatorLine = lines[startIndex + 1] || "";
@@ -109,7 +161,7 @@ function renderMarkdown(markdown) {
 
   const flushParagraph = () => {
     if (paragraph.length > 0) {
-      html.push(`<p>${renderInline(paragraph.join(" "))}</p>`);
+      html.push(`<p>${renderInline(joinSoftLines(paragraph))}</p>`);
       paragraph = [];
     }
   };
@@ -179,7 +231,9 @@ function renderMarkdown(markdown) {
         listType = "ul";
         html.push("<ul>");
       }
-      html.push(`<li>${renderInline(unordered[1])}</li>`);
+      const item = collectListItem(lines, index, unordered[1]);
+      html.push(`<li>${renderInline(item.text)}</li>`);
+      index = item.nextIndex - 1;
       continue;
     }
 
@@ -191,7 +245,9 @@ function renderMarkdown(markdown) {
         listType = "ol";
         html.push("<ol>");
       }
-      html.push(`<li>${renderInline(ordered[1])}</li>`);
+      const item = collectListItem(lines, index, ordered[1]);
+      html.push(`<li>${renderInline(item.text)}</li>`);
+      index = item.nextIndex - 1;
       continue;
     }
 
