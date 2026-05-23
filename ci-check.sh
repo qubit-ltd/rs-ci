@@ -26,6 +26,9 @@ NC='\033[0m'
 TEMP_FILES=()
 cleanup() {
     local file
+    if [ "${#TEMP_FILES[@]}" -eq 0 ]; then
+        return
+    fi
     for file in "${TEMP_FILES[@]}"; do
         [ -n "$file" ] && [ -f "$file" ] && command rm -f "$file"
     done
