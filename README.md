@@ -8,6 +8,7 @@ Shared scripts and CircleCI/GitHub Actions configuration for checking Rust code 
 
 - `align-ci.sh`: local auto-fix script for formatting and clippy.
 - `ci-check.sh`: local full CI parity check.
+- `update-submodule.sh`: local submodule sync script that updates submodules from remote tracking branches by default.
 - `cargo-feature-check.sh`: optional project-declared Cargo feature matrix runner.
 - `readme-version-check.py`: README dependency snippet checker that enforces current-crate `major.minor` versions.
 - `style-check.sh`: project-specific Rust source layout checks that rustfmt and clippy do not cover.
@@ -22,7 +23,7 @@ Shared scripts and CircleCI/GitHub Actions configuration for checking Rust code 
 Copy these files into the root of a Rust project:
 
 ```bash
-command cp align-ci.sh ci-check.sh cargo-feature-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
+command cp align-ci.sh ci-check.sh update-submodule.sh cargo-feature-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
 command cp .circleci/config.yml <project-root>/.circleci/config.yml
 ```
 
@@ -30,7 +31,7 @@ Then run:
 
 ```bash
 cd <project-root>
-chmod +x align-ci.sh ci-check.sh cargo-feature-check.sh readme-version-check.py style-check.sh coverage.sh
+chmod +x align-ci.sh ci-check.sh update-submodule.sh cargo-feature-check.sh readme-version-check.py style-check.sh coverage.sh
 ./style-check.sh
 ./ci-check.sh
 ```
