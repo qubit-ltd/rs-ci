@@ -13,4 +13,5 @@
 #   };
 #
 # Note: This is an unstable feature that requires nightly Rust
+max_width = 120
 imports_layout = "Vertical"
