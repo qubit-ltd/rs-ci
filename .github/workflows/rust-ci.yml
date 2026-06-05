@@ -4,10 +4,25 @@ on:
   workflow_call:
     inputs:
       rust_toolchain:
-        description: Rust toolchain used for Linux fmt, clippy, build, test, docs, and audit jobs.
+        description: Deprecated fallback for Linux fmt and clippy toolchains.
         required: false
         type: string
-        default: nightly
+        default: nightly-2026-06-05
+      rust_build_toolchain:
+        description: Rust toolchain used for Linux build, test, docs, coverage, package, and audit jobs.
+        required: false
+        type: string
+        default: "1.94.0"
+      rust_fmt_toolchain:
+        description: Rust toolchain used for rustfmt. Defaults to rust_toolchain when empty.
+        required: false
+        type: string
+        default: ""
+      rust_clippy_toolchain:
+        description: Rust toolchain used for clippy. Defaults to rust_toolchain when empty.
+        required: false
+        type: string
+        default: ""
       run_coverage_cfg_clippy:
         description: Set to 1 to run clippy again with RUSTFLAGS=--cfg coverage.
         required: false
@@ -38,6 +53,9 @@ env:
   CARGO_TERM_COLOR: always
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   RUST_TOOLCHAIN: ${{ inputs.rust_toolchain }}
+  RS_CI_BUILD_TOOLCHAIN: ${{ inputs.rust_build_toolchain }}
+  RS_CI_FMT_TOOLCHAIN: ${{ inputs.rust_fmt_toolchain || inputs.rust_toolchain }}
+  RS_CI_CLIPPY_TOOLCHAIN: ${{ inputs.rust_clippy_toolchain || inputs.rust_toolchain }}
   RUN_COVERAGE_CFG_CLIPPY: ${{ inputs.run_coverage_cfg_clippy }}
   CARGO_LLVM_COV_VERSION: ${{ inputs.cargo_llvm_cov_version }}
   RS_CI_CARGO_MATRIX_CONFIG: ${{ inputs.cargo_feature_matrix_config }}
@@ -63,16 +81,17 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target
-          key: ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-lint-${{ env.RS_CI_FMT_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
-            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-
+            ${{ runner.os }}-cargo-lint-${{ env.RS_CI_FMT_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
+            ${{ runner.os }}-cargo-lint-${{ env.RS_CI_FMT_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-
 
       - name: Install rustfmt and clippy
         run: |
-          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
-          rustup component add rustfmt clippy --toolchain "$RUST_TOOLCHAIN"
-          rustup default "$RUST_TOOLCHAIN"
+          rustup toolchain install "$RS_CI_FMT_TOOLCHAIN" --profile minimal
+          rustup component add rustfmt --toolchain "$RS_CI_FMT_TOOLCHAIN"
+          rustup toolchain install "$RS_CI_CLIPPY_TOOLCHAIN" --profile minimal
+          rustup component add clippy --toolchain "$RS_CI_CLIPPY_TOOLCHAIN"
 
       - name: Check code format
         run: |
@@ -81,15 +100,15 @@ jobs:
           else
             RUSTFMT_CONFIG=rustfmt.toml
           fi
-          cargo fmt -- --check --config-path "$RUSTFMT_CONFIG"
+          cargo +"$RS_CI_FMT_TOOLCHAIN" fmt -- --check --config-path "$RUSTFMT_CONFIG"
 
       - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
 
       - name: Run clippy for coverage cfg when enabled
         run: |
           if [ "$RUN_COVERAGE_CFG_CLIPPY" = "1" ]; then
-            RUSTFLAGS="--cfg coverage" cargo clippy --all-targets --all-features -- -D warnings
+            RUSTFLAGS="--cfg coverage" cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
           else
             echo "RUN_COVERAGE_CFG_CLIPPY is not enabled"
           fi
@@ -172,18 +191,18 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target
-          key: ${{ runner.os }}-cargo-feature-matrix-${{ env.RUST_TOOLCHAIN }}-${{ matrix.name }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-feature-matrix-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-${{ matrix.name }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-feature-matrix-${{ env.RUST_TOOLCHAIN }}-${{ matrix.name }}-${{ hashFiles('Cargo.toml') }}-
-            ${{ runner.os }}-cargo-feature-matrix-${{ env.RUST_TOOLCHAIN }}-
-            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-
+            ${{ runner.os }}-cargo-feature-matrix-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-${{ matrix.name }}-${{ hashFiles('Cargo.toml') }}-
+            ${{ runner.os }}-cargo-feature-matrix-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-
+            ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-
 
       - name: Install Rust toolchain
         if: ${{ matrix.enabled == true }}
         run: |
-          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
-          rustup component add clippy --toolchain "$RUST_TOOLCHAIN"
-          rustup default "$RUST_TOOLCHAIN"
+          rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
+          rustup toolchain install "$RS_CI_CLIPPY_TOOLCHAIN" --profile minimal
+          rustup component add clippy --toolchain "$RS_CI_CLIPPY_TOOLCHAIN"
 
       - name: Install jq
         if: ${{ matrix.enabled == true }}
@@ -219,16 +238,15 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target
-          key: ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
-            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-
+            ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
+            ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-
 
       - name: Install Rust toolchain
         run: |
-          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
-          rustup component add llvm-tools-preview --toolchain "$RUST_TOOLCHAIN"
-          rustup default "$RUST_TOOLCHAIN"
+          rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
+          rustup component add llvm-tools-preview --toolchain "$RS_CI_BUILD_TOOLCHAIN"
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@v2
@@ -243,10 +261,10 @@ jobs:
           fi
 
       - name: Build project (debug)
-        run: cargo build --verbose
+        run: cargo +"$RS_CI_BUILD_TOOLCHAIN" build --verbose
 
       - name: Run doc tests
-        run: cargo test --doc --verbose
+        run: cargo +"$RS_CI_BUILD_TOOLCHAIN" test --doc --verbose
 
       - name: Check README dependency versions
         run: |
@@ -257,6 +275,18 @@ jobs:
             python3 ./readme-version-check.py
           else
             echo "readme-version-check.py was not found" >&2
+            exit 1
+          fi
+
+      - name: Verify Cargo package
+        run: |
+          set -euo pipefail
+          if [ -x .rs-ci/cargo-package-check.sh ]; then
+            RS_CI_PROJECT_ROOT="$PWD" .rs-ci/cargo-package-check.sh
+          elif [ -x ./cargo-package-check.sh ]; then
+            RS_CI_PROJECT_ROOT="$PWD" ./cargo-package-check.sh
+          else
+            echo "cargo-package-check.sh was not found" >&2
             exit 1
           fi
 
@@ -388,7 +418,7 @@ jobs:
 
       - name: Build project (release)
         if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)) }}
-        run: cargo build --release --verbose
+        run: cargo +"$RS_CI_BUILD_TOOLCHAIN" build --release --verbose
 
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@v7
@@ -484,18 +514,17 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target
-          key: ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
-            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-
+            ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
+            ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-
 
       - name: Install Rust toolchain
         run: |
-          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
-          rustup default "$RUST_TOOLCHAIN"
+          rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
 
       - name: Generate documentation
-        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --verbose
+        run: RUSTDOCFLAGS="-D warnings" cargo +"$RS_CI_BUILD_TOOLCHAIN" doc --no-deps --verbose
 
       - name: Upload documentation artifact
         uses: actions/upload-artifact@v7
@@ -525,10 +554,10 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target
-          key: ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
-            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-
+            ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
+            ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-
 
       - name: Restore cargo-binstall cache
         uses: actions/cache@v5
@@ -548,8 +577,7 @@ jobs:
 
       - name: Install Rust toolchain
         run: |
-          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
-          rustup default "$RUST_TOOLCHAIN"
+          rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
 
       - name: Install cargo-binstall
         run: |
@@ -564,7 +592,7 @@ jobs:
           fi
 
       - name: Run security audit
-        run: cargo audit
+        run: cargo +"$RS_CI_BUILD_TOOLCHAIN" audit
 
   windows_test:
     name: Windows test
@@ -600,22 +628,24 @@ jobs:
           $env:Path = "$cargoBin;$env:Path"
           if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
             Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile "rustup-init.exe"
-            .\rustup-init.exe -y --default-toolchain stable --profile minimal
+            .\rustup-init.exe -y --default-toolchain $env:RS_CI_BUILD_TOOLCHAIN --profile minimal
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
-          rustup default stable
+          rustup toolchain install $env:RS_CI_BUILD_TOOLCHAIN --profile minimal
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          rustup component add clippy
+          rustup component add clippy --toolchain $env:RS_CI_BUILD_TOOLCHAIN
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          rustc --version
-          cargo --version
+          rustup run $env:RS_CI_BUILD_TOOLCHAIN rustc --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustup run $env:RS_CI_BUILD_TOOLCHAIN cargo --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run clippy on Windows
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
           $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
-          cargo clippy --all-targets --all-features -- -D warnings
+          cargo "+$env:RS_CI_BUILD_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build and test on Windows
@@ -623,5 +653,5 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
-          cargo test --verbose
+          cargo "+$env:RS_CI_BUILD_TOOLCHAIN" test --verbose
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

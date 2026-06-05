@@ -14,10 +14,11 @@
 
 set -euo pipefail
 
+RS_CI_BUILD_TOOLCHAIN="${RS_CI_BUILD_TOOLCHAIN:-1.94.0}"
 PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$(pwd)}"
 cd "$PROJECT_ROOT"
 
-if cargo package --allow-dirty; then
+if cargo +"$RS_CI_BUILD_TOOLCHAIN" package --allow-dirty; then
     echo "Cargo package verification passed."
 else
     status=$?

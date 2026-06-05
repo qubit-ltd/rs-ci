@@ -143,7 +143,11 @@ Cargo 默认 feature 选择，不额外检查其他 feature 组合。
 
 ## 可调环境变量
 
-- `RUST_TOOLCHAIN`：`fmt` 和 `clippy` 使用的工具链；默认是 `nightly`。
+- `RS_CI_BUILD_TOOLCHAIN`：build、test、docs、package、coverage 和 audit 检查使用的工具链；默认是 `1.94.0`。
+- `RS_CI_FMT_TOOLCHAIN`：`rustfmt` 使用的工具链；默认是 `nightly-2026-06-05`。
+- `RS_CI_CLIPPY_TOOLCHAIN`：`clippy` 使用的工具链；默认是 `nightly-2026-06-05`。
+- `RUST_TOOLCHAIN`：兼容旧配置的 fallback；当 `RS_CI_FMT_TOOLCHAIN` 和 `RS_CI_CLIPPY_TOOLCHAIN` 未设置时使用。
+- `RS_CI_UPDATE_TOOLCHAINS`：设为 `1` 时运行 `rustup toolchain update`；默认只安装缺失的工具链，不更新已安装工具链。
 - `RS_CI_PROJECT_ROOT`：当这些脚本从其他目录运行时，用它指定 Rust 项目根目录。
 - `RS_CI_RUSTFMT_CONFIG`：rustfmt 配置路径；默认是运行中的 CI 脚本所在目录旁的 `rustfmt.toml`。
 - `RS_CI_CARGO_MATRIX_CONFIG`：可选 Cargo feature matrix 配置文件的项目相对路径；默认是 `.rs-ci-cargo-matrix.json`。

@@ -14,8 +14,15 @@
 
 set -euo pipefail
 
-RUST_TOOLCHAIN="${RUST_TOOLCHAIN:-nightly}"
+RS_CI_DEFAULT_LINT_TOOLCHAIN="${RUST_TOOLCHAIN:-nightly-2026-06-05}"
+RS_CI_BUILD_TOOLCHAIN="${RS_CI_BUILD_TOOLCHAIN:-1.94.0}"
+RS_CI_FMT_TOOLCHAIN="${RS_CI_FMT_TOOLCHAIN:-$RS_CI_DEFAULT_LINT_TOOLCHAIN}"
+RS_CI_CLIPPY_TOOLCHAIN="${RS_CI_CLIPPY_TOOLCHAIN:-$RS_CI_DEFAULT_LINT_TOOLCHAIN}"
 RUN_COVERAGE_CFG_CLIPPY="${RUN_COVERAGE_CFG_CLIPPY:-0}"
+
+export RS_CI_BUILD_TOOLCHAIN
+export RS_CI_FMT_TOOLCHAIN
+export RS_CI_CLIPPY_TOOLCHAIN
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -74,55 +81,42 @@ require_executable_file() {
     fi
 }
 
-ensure_toolchain_components() {
-    if ! rustup toolchain list | grep -q "^${RUST_TOOLCHAIN}"; then
-        print_warning "Rust toolchain '$RUST_TOOLCHAIN' not found; installing"
-        rustup toolchain install "$RUST_TOOLCHAIN"
+ensure_toolchain() {
+    local toolchain="$1"
+    shift
+
+    if ! rustup toolchain list | grep -q "^${toolchain}" || ! cargo +"$toolchain" --version > /dev/null 2>&1; then
+        print_warning "Rust toolchain '$toolchain' not found or incomplete; installing"
+        rustup toolchain install "$toolchain" --profile minimal
     fi
 
-    if [ "${RS_CI_SKIP_TOOLCHAIN_UPDATE:-0}" != "1" ]; then
-        print_step "Updating Rust toolchain '$RUST_TOOLCHAIN' (align Clippy/rustfmt with CI)"
-        if ! rustup toolchain update "$RUST_TOOLCHAIN"; then
+    if [ "${RS_CI_UPDATE_TOOLCHAINS:-0}" = "1" ]; then
+        print_step "Updating Rust toolchain '$toolchain'"
+        if ! rustup toolchain update "$toolchain"; then
             print_warning "rustup toolchain update failed; continuing with the already-installed toolchain"
         fi
     fi
 
-    rustup component add rustfmt clippy --toolchain "$RUST_TOOLCHAIN"
+    if [ "$#" -gt 0 ]; then
+        rustup component add "$@" --toolchain "$toolchain"
+    fi
+}
+
+ensure_lint_toolchains() {
+    ensure_toolchain "$RS_CI_FMT_TOOLCHAIN" rustfmt
+    if [ "$RS_CI_CLIPPY_TOOLCHAIN" = "$RS_CI_FMT_TOOLCHAIN" ]; then
+        rustup component add clippy --toolchain "$RS_CI_CLIPPY_TOOLCHAIN"
+    else
+        ensure_toolchain "$RS_CI_CLIPPY_TOOLCHAIN" clippy
+    fi
+}
+
+ensure_build_toolchain() {
+    ensure_toolchain "$RS_CI_BUILD_TOOLCHAIN"
 }
 
 ensure_llvm_tools() {
-    local active_toolchain
-    local sysroot
-    local host
-    local bindir
-    local profdata
-    local cov
-
-    active_toolchain=$(rustup show active-toolchain 2>/dev/null | awk '{print $1; exit}' || true)
-    if [ -n "$active_toolchain" ]; then
-        sysroot=$(rustup run "$active_toolchain" rustc --print sysroot 2>/dev/null || true)
-        host=$(rustup run "$active_toolchain" rustc -vV 2>/dev/null | sed -n 's/^host: //p' || true)
-    else
-        sysroot=$(rustc --print sysroot 2>/dev/null || true)
-        host=$(rustc -vV 2>/dev/null | sed -n 's/^host: //p' || true)
-    fi
-
-    if [ -z "$sysroot" ] || [ -z "$host" ]; then
-        print_warning "Unable to detect Rust sysroot; cargo-llvm-cov will report any missing tool details"
-        return
-    fi
-
-    bindir="$sysroot/lib/rustlib/$host/bin"
-    profdata="$bindir/llvm-profdata"
-    cov="$bindir/llvm-cov"
-    if [ ! -f "$profdata" ] || [ ! -f "$cov" ]; then
-        print_warning "llvm-tools-preview is missing for active toolchain; installing"
-        if [ -n "$active_toolchain" ]; then
-            rustup component add llvm-tools-preview --toolchain "$active_toolchain"
-        else
-            rustup component add llvm-tools-preview
-        fi
-    fi
+    rustup component add llvm-tools-preview --toolchain "$RS_CI_BUILD_TOOLCHAIN"
 }
 
 run_clippy() {
@@ -130,7 +124,7 @@ run_clippy() {
     log_file=$(mktemp -t rs-ci-clippy.XXXXXX)
     TEMP_FILES+=("$log_file")
 
-    if cargo +"$RUST_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings 2>&1 | tee "$log_file"; then
+    if cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings 2>&1 | tee "$log_file"; then
         print_success "Clippy checks passed"
     else
         print_error "Clippy found issues"
@@ -147,14 +141,14 @@ run_security_audit() {
     audit_log=$(mktemp -t rs-ci-audit.XXXXXX)
     TEMP_FILES+=("$audit_log")
 
-    if cargo audit 2>&1 | tee "$audit_log"; then
+    if cargo +"$RS_CI_BUILD_TOOLCHAIN" audit 2>&1 | tee "$audit_log"; then
         print_success "Security audit passed, no known vulnerabilities found"
         return
     fi
 
     if grep -qi "couldn't fetch advisory database\\|failed to fetch advisory database\\|failed to prepare fetch\\|error sending request" "$audit_log"; then
         print_warning "cargo audit could not fetch the RustSec advisory database; retrying with cached data"
-        if cargo audit --no-fetch --stale; then
+        if cargo +"$RS_CI_BUILD_TOOLCHAIN" audit --no-fetch --stale; then
             print_success "Security audit passed using cached advisory data"
             print_warning "CI should still verify against the latest advisory database"
             return
@@ -166,7 +160,7 @@ run_security_audit() {
     echo ""
     echo "Please review the security issues and consider:"
     echo "  1. Update dependencies: cargo update"
-    echo "  2. View details: cargo audit"
+    echo "  2. View details: cargo +$RS_CI_BUILD_TOOLCHAIN audit"
     echo "  3. If unable to fix immediately, temporarily ignore in .cargo-audit.toml"
     exit 1
 }
@@ -185,11 +179,14 @@ if [ ! -f "$RUSTFMT_CONFIG" ]; then
 fi
 
 echo "Starting local CI checks"
+echo "Build toolchain: $RS_CI_BUILD_TOOLCHAIN"
+echo "Rustfmt toolchain: $RS_CI_FMT_TOOLCHAIN"
+echo "Clippy toolchain: $RS_CI_CLIPPY_TOOLCHAIN"
 echo ""
 
-print_step "1/11 Checking code format (cargo +$RUST_TOOLCHAIN fmt -- --check --config-path $RUSTFMT_CONFIG)"
-ensure_toolchain_components
-if cargo +"$RUST_TOOLCHAIN" fmt -- --check --config-path "$RUSTFMT_CONFIG" > /dev/null 2>&1; then
+print_step "1/11 Checking code format (cargo +$RS_CI_FMT_TOOLCHAIN fmt -- --check --config-path $RUSTFMT_CONFIG)"
+ensure_lint_toolchains
+if cargo +"$RS_CI_FMT_TOOLCHAIN" fmt -- --check --config-path "$RUSTFMT_CONFIG" > /dev/null 2>&1; then
     print_success "Code format check passed"
 else
     print_error "Code format check failed"
@@ -200,11 +197,11 @@ else
 fi
 echo ""
 
-print_step "2/11 Running Clippy checks (cargo +$RUST_TOOLCHAIN clippy)"
+print_step "2/11 Running Clippy checks (cargo +$RS_CI_CLIPPY_TOOLCHAIN clippy)"
 run_clippy
 if [ "$RUN_COVERAGE_CFG_CLIPPY" = "1" ]; then
     print_step "2b/11 Running Clippy checks with RUSTFLAGS=--cfg coverage"
-    RUSTFLAGS="--cfg coverage" cargo +"$RUST_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
+    RUSTFLAGS="--cfg coverage" cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
     print_success "Coverage cfg clippy checks passed"
 fi
 echo ""
@@ -215,26 +212,27 @@ RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/style-check.sh"
 print_success "Rust style checks passed"
 echo ""
 
-print_step "4/11 Building project"
-if cargo build --verbose > /dev/null 2>&1; then
+print_step "4/11 Building project (cargo +$RS_CI_BUILD_TOOLCHAIN)"
+ensure_build_toolchain
+if cargo +"$RS_CI_BUILD_TOOLCHAIN" build --verbose > /dev/null 2>&1; then
     print_success "Debug build succeeded"
 else
     print_error "Debug build failed"
-    cargo build --verbose
+    cargo +"$RS_CI_BUILD_TOOLCHAIN" build --verbose
     exit 1
 fi
 
-if cargo build --release --verbose > /dev/null 2>&1; then
+if cargo +"$RS_CI_BUILD_TOOLCHAIN" build --release --verbose > /dev/null 2>&1; then
     print_success "Release build succeeded"
 else
     print_error "Release build failed"
-    cargo build --release --verbose
+    cargo +"$RS_CI_BUILD_TOOLCHAIN" build --release --verbose
     exit 1
 fi
 echo ""
 
-print_step "5/11 Running tests (cargo test --all-features)"
-if cargo test --all-features --verbose; then
+print_step "5/11 Running tests (cargo +$RS_CI_BUILD_TOOLCHAIN test --all-features)"
+if cargo +"$RS_CI_BUILD_TOOLCHAIN" test --all-features --verbose; then
     print_success "All tests passed"
 else
     print_error "Tests failed"
@@ -243,11 +241,11 @@ fi
 echo ""
 
 print_step "6/11 Building documentation with warnings denied"
-if RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --verbose > /dev/null 2>&1; then
+if RUSTDOCFLAGS="-D warnings" cargo +"$RS_CI_BUILD_TOOLCHAIN" doc --no-deps --verbose > /dev/null 2>&1; then
     print_success "Documentation build passed"
 else
     print_error "Documentation build failed"
-    RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --verbose
+    RUSTDOCFLAGS="-D warnings" cargo +"$RS_CI_BUILD_TOOLCHAIN" doc --no-deps --verbose
     exit 1
 fi
 echo ""

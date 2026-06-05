@@ -34,14 +34,14 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - v4-cargo-cache-nightly-{{ arch }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}
-            - v4-cargo-cache-nightly-{{ arch }}-{{ checksum "Cargo.toml" }}-
-            - v4-cargo-cache-nightly-{{ arch }}-
+            - v5-cargo-cache-1.94.0-nightly-2026-06-05-{{ arch }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}
+            - v5-cargo-cache-1.94.0-nightly-2026-06-05-{{ arch }}-{{ checksum "Cargo.toml" }}-
+            - v5-cargo-cache-1.94.0-nightly-2026-06-05-{{ arch }}-
 
   save_cargo_cache:
     steps:
       - save_cache:
-          key: v4-cargo-cache-nightly-{{ arch }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}
+          key: v5-cargo-cache-1.94.0-nightly-2026-06-05-{{ arch }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}
           paths:
             - "~/.cargo/registry/index"
             - "~/.cargo/registry/cache"
@@ -72,12 +72,19 @@ jobs:
   fast_checks:
     docker:
       - image: rustlang/rust:nightly
+    environment:
+      RS_CI_FMT_TOOLCHAIN: nightly-2026-06-05
+      RS_CI_CLIPPY_TOOLCHAIN: nightly-2026-06-05
     steps:
       - checkout_https
       - restore_cargo_cache
       - run:
           name: Install rustfmt and clippy
-          command: rustup component add rustfmt clippy
+          command: |
+            rustup toolchain install "$RS_CI_FMT_TOOLCHAIN" --profile minimal
+            rustup component add rustfmt --toolchain "$RS_CI_FMT_TOOLCHAIN"
+            rustup toolchain install "$RS_CI_CLIPPY_TOOLCHAIN" --profile minimal
+            rustup component add clippy --toolchain "$RS_CI_CLIPPY_TOOLCHAIN"
       - run:
           name: Check code format
           command: |
@@ -86,15 +93,15 @@ jobs:
             else
               RUSTFMT_CONFIG=rustfmt.toml
             fi
-            cargo fmt -- --check --config-path "$RUSTFMT_CONFIG"
+            cargo +"$RS_CI_FMT_TOOLCHAIN" fmt -- --check --config-path "$RUSTFMT_CONFIG"
       - run:
           name: Run clippy
-          command: cargo clippy --all-targets --all-features -- -D warnings
+          command: cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
       - run:
           name: Run clippy for coverage cfg when enabled
           command: |
             if [ "${RUN_COVERAGE_CFG_CLIPPY:-0}" = "1" ]; then
-              RUSTFLAGS="--cfg coverage" cargo clippy --all-targets --all-features -- -D warnings
+              RUSTFLAGS="--cfg coverage" cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
             else
               echo "RUN_COVERAGE_CFG_CLIPPY is not enabled"
             fi
@@ -104,6 +111,9 @@ jobs:
     docker:
       - image: rustlang/rust:nightly
     resource_class: medium+
+    environment:
+      RS_CI_BUILD_TOOLCHAIN: "1.94.0"
+      RS_CI_CLIPPY_TOOLCHAIN: nightly-2026-06-05
     steps:
       - checkout_https
       - restore_cargo_cache
@@ -116,20 +126,23 @@ jobs:
       - run:
           name: Install cargo-llvm-cov and jq
           command: |
+            rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
+            rustup toolchain install "$RS_CI_CLIPPY_TOOLCHAIN" --profile minimal
+            rustup component add clippy --toolchain "$RS_CI_CLIPPY_TOOLCHAIN"
             if ! command -v cargo-llvm-cov > /dev/null 2>&1; then
               cargo binstall cargo-llvm-cov --version 0.6.21 --no-confirm --log-level info
             fi
-            rustup component add llvm-tools-preview
+            rustup component add llvm-tools-preview --toolchain "$RS_CI_BUILD_TOOLCHAIN"
             if ! command -v jq > /dev/null 2>&1; then
               apt-get update
               apt-get install -y jq
             fi
       - run:
           name: Build project (debug)
-          command: cargo build --verbose
+          command: cargo +"$RS_CI_BUILD_TOOLCHAIN" build --verbose
       - run:
           name: Run doc tests
-          command: cargo test --doc --verbose
+          command: cargo +"$RS_CI_BUILD_TOOLCHAIN" test --doc --verbose
       - run:
           name: Run configured Cargo feature matrix
           command: |
@@ -181,7 +194,7 @@ jobs:
               echo "Skipping release build for pull request"
               exit 0
             fi
-            cargo build --release --verbose
+            cargo +"$RS_CI_BUILD_TOOLCHAIN" build --release --verbose
       - save_cargo_cache
       - save_cache:
           key: v1-cargo-binaries-llvm-cov-0.6.21-{{ arch }}
@@ -206,14 +219,19 @@ jobs:
   doc:
     docker:
       - image: rustlang/rust:nightly
+    environment:
+      RS_CI_BUILD_TOOLCHAIN: "1.94.0"
     steps:
       - checkout_https
       - restore_cargo_cache
       - attach_workspace:
           at: .
       - run:
+          name: Install Rust toolchain
+          command: rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
+      - run:
           name: Generate documentation
-          command: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --verbose
+          command: RUSTDOCFLAGS="-D warnings" cargo +"$RS_CI_BUILD_TOOLCHAIN" doc --no-deps --verbose
       - store_artifacts:
           path: target/doc
           destination: doc
@@ -221,6 +239,8 @@ jobs:
   security_audit:
     docker:
       - image: rustlang/rust:nightly
+    environment:
+      RS_CI_BUILD_TOOLCHAIN: "1.94.0"
     steps:
       - checkout_https
       - restore_cargo_cache
@@ -233,6 +253,7 @@ jobs:
       - run:
           name: Install cargo-audit
           command: |
+            rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
             if ! command -v cargo-audit > /dev/null 2>&1; then
               cargo binstall cargo-audit --no-confirm --log-level info
             fi
@@ -242,10 +263,12 @@ jobs:
             - "~/.cargo/bin/cargo-audit"
       - run:
           name: Run security audit
-          command: cargo audit
+          command: cargo +"$RS_CI_BUILD_TOOLCHAIN" audit
 
   windows_test:
     executor: win/server-2022
+    environment:
+      RS_CI_BUILD_TOOLCHAIN: "1.94.0"
     steps:
       - checkout_https_windows
       - restore_cache:
@@ -261,28 +284,30 @@ jobs:
             $env:Path = "$cargoBin;$env:Path"
             if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
               Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile "rustup-init.exe"
-              .\rustup-init.exe -y --default-toolchain stable --profile minimal
+              .\rustup-init.exe -y --default-toolchain $env:RS_CI_BUILD_TOOLCHAIN --profile minimal
               if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             }
-            rustup default stable
+            rustup toolchain install $env:RS_CI_BUILD_TOOLCHAIN --profile minimal
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            rustup component add clippy
+            rustup component add clippy --toolchain $env:RS_CI_BUILD_TOOLCHAIN
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            rustc --version
-            cargo --version
+            rustup run $env:RS_CI_BUILD_TOOLCHAIN rustc --version
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            rustup run $env:RS_CI_BUILD_TOOLCHAIN cargo --version
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - run:
           name: Run clippy on Windows
           command: |
             $ErrorActionPreference = "Stop"
             $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
-            cargo clippy --all-targets --all-features -- -D warnings
+            cargo "+$env:RS_CI_BUILD_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - run:
           name: Build and test on Windows
           command: |
             $ErrorActionPreference = "Stop"
             $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
-            cargo test --verbose
+            cargo "+$env:RS_CI_BUILD_TOOLCHAIN" test --verbose
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - save_cache:
           key: v1-windows-cargo-cache-{{ arch }}-{{ checksum "Cargo.toml" }}-{{ checksum "Cargo.lock" }}

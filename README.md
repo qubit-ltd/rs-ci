@@ -154,7 +154,11 @@ installation.
 
 ## Tunable Environment Variables
 
-- `RUST_TOOLCHAIN`: toolchain used for `fmt` and `clippy`; defaults to `nightly`.
+- `RS_CI_BUILD_TOOLCHAIN`: toolchain used for build, test, docs, package, coverage, and audit checks; defaults to `1.94.0`.
+- `RS_CI_FMT_TOOLCHAIN`: toolchain used for `rustfmt`; defaults to `nightly-2026-06-05`.
+- `RS_CI_CLIPPY_TOOLCHAIN`: toolchain used for `clippy`; defaults to `nightly-2026-06-05`.
+- `RUST_TOOLCHAIN`: deprecated fallback for `RS_CI_FMT_TOOLCHAIN` and `RS_CI_CLIPPY_TOOLCHAIN` when those variables are unset.
+- `RS_CI_UPDATE_TOOLCHAINS`: set to `1` to run `rustup toolchain update`; by default, scripts install missing toolchains but do not update installed ones.
 - `RS_CI_PROJECT_ROOT`: Rust project root used when these scripts are run from another directory.
 - `RS_CI_RUSTFMT_CONFIG`: rustfmt configuration path; defaults to `rustfmt.toml` beside the running CI script.
 - `RS_CI_CARGO_MATRIX_CONFIG`: project-relative path to the optional Cargo feature matrix config; defaults to `.rs-ci-cargo-matrix.json`.

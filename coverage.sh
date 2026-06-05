@@ -14,6 +14,7 @@
 
 set -euo pipefail
 
+RS_CI_BUILD_TOOLCHAIN="${RS_CI_BUILD_TOOLCHAIN:-1.94.0}"
 MIN_FUNCTION_COVERAGE="${MIN_FUNCTION_COVERAGE:-100}"
 MIN_LINE_COVERAGE="${MIN_LINE_COVERAGE:-95}"
 MIN_REGION_COVERAGE="${MIN_REGION_COVERAGE:-95}"
@@ -53,6 +54,7 @@ print_usage() {
     echo "  --clean    Clean old coverage data before running"
     echo ""
     echo "Environment:"
+    echo "  RS_CI_BUILD_TOOLCHAIN=${RS_CI_BUILD_TOOLCHAIN}"
     echo "  MIN_FUNCTION_COVERAGE=${MIN_FUNCTION_COVERAGE}"
     echo "  MIN_LINE_COVERAGE=${MIN_LINE_COVERAGE}     # required: > value"
     echo "  MIN_REGION_COVERAGE=${MIN_REGION_COVERAGE} # required: > value"
@@ -304,6 +306,7 @@ SOURCE_PREFIX="$CURRENT_CRATE_DIR/$COVERAGE_SOURCE_DIR/"
 
 echo "Starting code coverage testing"
 echo "Package: $PACKAGE_NAME"
+echo "Cargo toolchain: $RS_CI_BUILD_TOOLCHAIN"
 echo "Coverage source prefix: $SOURCE_PREFIX"
 echo "Exclude pattern: $EXCLUDE_PATTERN"
 if [ "$COVERAGE_ALL_FEATURES" = "1" ]; then
@@ -316,7 +319,7 @@ fi
 
 if [ "$CLEAN_FLAG" = "yes" ]; then
     echo "Cleaning old coverage data"
-    cargo llvm-cov clean
+    cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov clean
 else
     echo "Using cached build data; pass --clean to clean first"
 fi
@@ -330,7 +333,7 @@ case "$FORMAT_ARG" in
         if [ "$COVERAGE_OPEN_HTML" = "1" ]; then
             html_open_args=(--open)
         fi
-        cargo llvm-cov --package "$PACKAGE_NAME" "${COVERAGE_FEATURE_ARGS[@]}" \
+        cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov --package "$PACKAGE_NAME" "${COVERAGE_FEATURE_ARGS[@]}" \
             --html --output-dir target/llvm-cov \
             "${html_open_args[@]}" \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
@@ -339,7 +342,7 @@ case "$FORMAT_ARG" in
 
     text)
         echo "Generating text coverage report"
-        cargo llvm-cov --package "$PACKAGE_NAME" "${COVERAGE_FEATURE_ARGS[@]}" \
+        cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov --package "$PACKAGE_NAME" "${COVERAGE_FEATURE_ARGS[@]}" \
             --ignore-filename-regex "$EXCLUDE_PATTERN" \
             | tee target/llvm-cov/coverage.txt
         echo "Text report: target/llvm-cov/coverage.txt"
@@ -347,7 +350,7 @@ case "$FORMAT_ARG" in
 
     lcov)
         echo "Generating LCOV coverage report"
-        cargo llvm-cov --package "$PACKAGE_NAME" "${COVERAGE_FEATURE_ARGS[@]}" \
+        cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov --package "$PACKAGE_NAME" "${COVERAGE_FEATURE_ARGS[@]}" \
             --lcov --output-path target/llvm-cov/lcov.info \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
         echo "LCOV report: target/llvm-cov/lcov.info"
@@ -355,7 +358,7 @@ case "$FORMAT_ARG" in
 
     json)
         echo "Generating JSON coverage report"
-        cargo llvm-cov --package "$PACKAGE_NAME" "${COVERAGE_FEATURE_ARGS[@]}" \
+        cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov --package "$PACKAGE_NAME" "${COVERAGE_FEATURE_ARGS[@]}" \
             --json --output-path target/llvm-cov/coverage.json \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
         maybe_check_json_coverage target/llvm-cov/coverage.json "$SOURCE_PREFIX"
@@ -364,7 +367,7 @@ case "$FORMAT_ARG" in
 
     cobertura)
         echo "Generating Cobertura XML coverage report"
-        cargo llvm-cov --package "$PACKAGE_NAME" "${COVERAGE_FEATURE_ARGS[@]}" \
+        cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov --package "$PACKAGE_NAME" "${COVERAGE_FEATURE_ARGS[@]}" \
             --cobertura --output-path target/llvm-cov/cobertura.xml \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
         echo "Cobertura report: target/llvm-cov/cobertura.xml"
@@ -374,28 +377,28 @@ case "$FORMAT_ARG" in
         echo "Generating all coverage reports from one test run"
 
         echo "  - collecting coverage data"
-        cargo llvm-cov --package "$PACKAGE_NAME" "${COVERAGE_FEATURE_ARGS[@]}" --no-report \
+        cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov --package "$PACKAGE_NAME" "${COVERAGE_FEATURE_ARGS[@]}" --no-report \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
 
         echo "  - HTML"
-        cargo llvm-cov report --package "$PACKAGE_NAME" --html --output-dir target/llvm-cov \
+        cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov report --package "$PACKAGE_NAME" --html --output-dir target/llvm-cov \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
 
         echo "  - LCOV"
-        cargo llvm-cov report --package "$PACKAGE_NAME" --lcov --output-path target/llvm-cov/lcov.info \
+        cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov report --package "$PACKAGE_NAME" --lcov --output-path target/llvm-cov/lcov.info \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
 
         echo "  - JSON"
-        cargo llvm-cov report --package "$PACKAGE_NAME" --json --output-path target/llvm-cov/coverage.json \
+        cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov report --package "$PACKAGE_NAME" --json --output-path target/llvm-cov/coverage.json \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
         maybe_check_json_coverage target/llvm-cov/coverage.json "$SOURCE_PREFIX"
 
         echo "  - Cobertura"
-        cargo llvm-cov report --package "$PACKAGE_NAME" --cobertura --output-path target/llvm-cov/cobertura.xml \
+        cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov report --package "$PACKAGE_NAME" --cobertura --output-path target/llvm-cov/cobertura.xml \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
 
         echo "  - text"
-        cargo llvm-cov report --package "$PACKAGE_NAME" --text \
+        cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov report --package "$PACKAGE_NAME" --text \
             --ignore-filename-regex "$EXCLUDE_PATTERN" \
             | tee target/llvm-cov/coverage.txt
 

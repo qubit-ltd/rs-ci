@@ -16,7 +16,9 @@
 
 set -euo pipefail
 
-RUST_TOOLCHAIN="${RUST_TOOLCHAIN:-nightly}"
+RS_CI_DEFAULT_LINT_TOOLCHAIN="${RUST_TOOLCHAIN:-nightly-2026-06-05}"
+RS_CI_BUILD_TOOLCHAIN="${RS_CI_BUILD_TOOLCHAIN:-1.94.0}"
+RS_CI_CLIPPY_TOOLCHAIN="${RS_CI_CLIPPY_TOOLCHAIN:-$RS_CI_DEFAULT_LINT_TOOLCHAIN}"
 CONFIG_FILE_NAME="${RS_CI_CARGO_MATRIX_CONFIG:-.rs-ci-cargo-matrix.json}"
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -38,7 +40,8 @@ print_usage() {
     echo "Usage: ./cargo-feature-check.sh [run-all|run-index <index>|github-matrix|validate|help]"
     echo ""
     echo "Environment:"
-    echo "  RUST_TOOLCHAIN=${RUST_TOOLCHAIN}"
+    echo "  RS_CI_BUILD_TOOLCHAIN=${RS_CI_BUILD_TOOLCHAIN}"
+    echo "  RS_CI_CLIPPY_TOOLCHAIN=${RS_CI_CLIPPY_TOOLCHAIN}"
     echo "  RS_CI_PROJECT_ROOT=${PROJECT_ROOT}"
     echo "  RS_CI_CARGO_MATRIX_CONFIG=${CONFIG_FILE_NAME}"
 }
@@ -149,22 +152,22 @@ run_cargo_command() {
 
     case "$command" in
         check)
-            cargo check "${FEATURE_ARGS[@]}" --verbose
+            cargo +"$RS_CI_BUILD_TOOLCHAIN" check "${FEATURE_ARGS[@]}" --verbose
             ;;
         build)
-            cargo build "${FEATURE_ARGS[@]}" --verbose
+            cargo +"$RS_CI_BUILD_TOOLCHAIN" build "${FEATURE_ARGS[@]}" --verbose
             ;;
         test)
-            cargo test "${FEATURE_ARGS[@]}" --verbose
+            cargo +"$RS_CI_BUILD_TOOLCHAIN" test "${FEATURE_ARGS[@]}" --verbose
             ;;
         doc)
-            RUSTDOCFLAGS="-D warnings" cargo doc --no-deps "${FEATURE_ARGS[@]}" --verbose
+            RUSTDOCFLAGS="-D warnings" cargo +"$RS_CI_BUILD_TOOLCHAIN" doc --no-deps "${FEATURE_ARGS[@]}" --verbose
             ;;
         doc-test)
-            cargo test --doc "${FEATURE_ARGS[@]}" --verbose
+            cargo +"$RS_CI_BUILD_TOOLCHAIN" test --doc "${FEATURE_ARGS[@]}" --verbose
             ;;
         clippy)
-            cargo +"$RUST_TOOLCHAIN" clippy --all-targets "${FEATURE_ARGS[@]}" -- -D warnings
+            cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets "${FEATURE_ARGS[@]}" -- -D warnings
             ;;
         *)
             echo "error: unsupported command '$command'" >&2
@@ -192,7 +195,11 @@ run_check_index() {
         commands+=("$command")
     done < <(jq -r --argjson index "$index" '.checks[$index].commands[]' "$CONFIG_FILE")
     for command in "${commands[@]}"; do
-        echo "==> cargo $command ${FEATURE_ARGS[*]}"
+        if [ "$command" = "clippy" ]; then
+            echo "==> cargo +$RS_CI_CLIPPY_TOOLCHAIN $command ${FEATURE_ARGS[*]}"
+        else
+            echo "==> cargo +$RS_CI_BUILD_TOOLCHAIN $command ${FEATURE_ARGS[*]}"
+        fi
         run_cargo_command "$command"
     done
 }
