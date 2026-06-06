@@ -55,7 +55,7 @@ class CargoPackageCheckTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(
-                f"{root} :: package --allow-dirty\n",
+                f"{root} :: +1.94.0 package --allow-dirty\n",
                 log_path.read_text(encoding="utf-8"),
             )
             self.assertIn("Cargo package verification passed", result.stdout)

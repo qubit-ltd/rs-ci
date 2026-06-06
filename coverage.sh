@@ -73,6 +73,34 @@ require_command() {
     fi
 }
 
+is_executable_tool() {
+    local tool="$1"
+
+    case "$tool" in
+        */*)
+            [ -x "$tool" ]
+            ;;
+        *)
+            command -v "$tool" > /dev/null 2>&1
+            ;;
+    esac
+}
+
+ignore_invalid_llvm_tool_override() {
+    local variable_name="$1"
+    local tool="${!variable_name:-}"
+
+    if [ -n "$tool" ] && ! is_executable_tool "$tool"; then
+        echo "warning: ignoring invalid $variable_name override: $tool" >&2
+        unset "$variable_name"
+    fi
+}
+
+ignore_invalid_llvm_tool_overrides() {
+    ignore_invalid_llvm_tool_override LLVM_COV
+    ignore_invalid_llvm_tool_override LLVM_PROFDATA
+}
+
 detect_package_name() {
     awk -F'"' '/^[[:space:]]*name[[:space:]]*=/ { print $2; exit }' Cargo.toml
 }
@@ -282,6 +310,7 @@ fi
 
 require_command cargo
 require_command cargo-llvm-cov
+ignore_invalid_llvm_tool_overrides
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
