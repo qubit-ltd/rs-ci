@@ -163,7 +163,7 @@ installation.
 - `RS_CI_PROJECT_ROOT`: Rust project root used when these scripts are run from another directory.
 - `RS_CI_RUSTFMT_CONFIG`: rustfmt configuration path; defaults to `rustfmt.toml` beside the running CI script.
 - `RS_CI_CARGO_MATRIX_CONFIG`: project-relative path to the optional Cargo feature matrix config; defaults to `.rs-ci-cargo-matrix.json`.
-- `RS_CI_CARGO_HOME_MODE`: Cargo cache mode for local scripts, either `shared` or `project`; defaults to `shared`. Use `project` when running multiple `rs-*` repositories in parallel to avoid shared Cargo package cache and index locks.
+- `RS_CI_CARGO_HOME_MODE`: Cargo cache mode for local scripts, either `project` or `shared`; defaults to `project` so parallel `rs-*` checks do not share Cargo package cache and index locks. Set it to `shared` to keep Cargo's normal global cache behavior.
 - `RS_CI_CARGO_HOME_ROOT`: root directory for per-project Cargo homes when `RS_CI_CARGO_HOME_MODE=project`; defaults to `$XDG_CACHE_HOME/rs-ci/cargo-home` or `$HOME/.cache/rs-ci/cargo-home`.
 - `RUN_COVERAGE_CFG_CLIPPY`: set to `1` to run clippy with `RUSTFLAGS="--cfg coverage"`.
 - `RUN_COVERAGE_IN_ALIGN`: set to `1` to run `coverage.sh json` from `align-ci.sh`; defaults to `0`.
