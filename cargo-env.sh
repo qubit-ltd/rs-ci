@@ -13,7 +13,7 @@
 
 configure_rs_ci_cargo_home() {
     local project_root="$1"
-    local mode="${RS_CI_CARGO_HOME_MODE:-shared}"
+    local mode="${RS_CI_CARGO_HOME_MODE:-project}"
     local original_cargo_home
     local cargo_home_root
     local project_name

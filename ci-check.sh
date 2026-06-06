@@ -187,7 +187,7 @@ echo "Starting local CI checks"
 echo "Build toolchain: $RS_CI_BUILD_TOOLCHAIN"
 echo "Rustfmt toolchain: $RS_CI_FMT_TOOLCHAIN"
 echo "Clippy toolchain: $RS_CI_CLIPPY_TOOLCHAIN"
-if [ "${RS_CI_CARGO_HOME_MODE:-shared}" = "project" ]; then
+if [ "${RS_CI_CARGO_HOME_MODE:-project}" = "project" ]; then
     echo "Cargo home: $CARGO_HOME"
 fi
 echo ""

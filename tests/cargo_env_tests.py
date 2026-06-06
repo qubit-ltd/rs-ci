@@ -40,7 +40,7 @@ def run_helper(project_root: Path, env_overrides: dict[str, str]) -> subprocess.
 
 
 class CargoEnvTests(unittest.TestCase):
-    def test_project_mode_uses_project_specific_cargo_home(self) -> None:
+    def test_default_mode_uses_project_specific_cargo_home(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             temp_root = Path(tmp)
             project_root = temp_root / "work" / "rs-config"
@@ -53,7 +53,6 @@ class CargoEnvTests(unittest.TestCase):
                 {
                     "CARGO_HOME": str(original_cargo_home),
                     "PATH": "/usr/bin",
-                    "RS_CI_CARGO_HOME_MODE": "project",
                     "RS_CI_CARGO_HOME_ROOT": str(cargo_home_root),
                 },
             )
