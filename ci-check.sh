@@ -165,12 +165,17 @@ run_security_audit() {
     exit 1
 }
 
-require_command cargo
-require_command rustup
-
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 RUSTFMT_CONFIG="${RS_CI_RUSTFMT_CONFIG:-$SCRIPT_DIR/rustfmt.toml}"
 PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
+
+# shellcheck source=cargo-env.sh
+source "$SCRIPT_DIR/cargo-env.sh"
+configure_rs_ci_cargo_home "$PROJECT_ROOT"
+
+require_command cargo
+require_command rustup
+
 cd "$PROJECT_ROOT"
 
 if [ ! -f "$RUSTFMT_CONFIG" ]; then
@@ -182,6 +187,9 @@ echo "Starting local CI checks"
 echo "Build toolchain: $RS_CI_BUILD_TOOLCHAIN"
 echo "Rustfmt toolchain: $RS_CI_FMT_TOOLCHAIN"
 echo "Clippy toolchain: $RS_CI_CLIPPY_TOOLCHAIN"
+if [ "${RS_CI_CARGO_HOME_MODE:-shared}" = "project" ]; then
+    echo "Cargo home: $CARGO_HOME"
+fi
 echo ""
 
 print_step "1/11 Checking code format (cargo +$RS_CI_FMT_TOOLCHAIN fmt -- --check --config-path $RUSTFMT_CONFIG)"

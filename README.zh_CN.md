@@ -8,6 +8,7 @@
 
 - `align-ci.sh`：本地自动修复脚本，用于格式化代码并运行 clippy。
 - `ci-check.sh`：本地完整 CI 等价检查脚本。
+- `cargo-env.sh`：本地入口脚本共用的 Cargo 环境设置。
 - `update-submodule.sh`：本地 submodule 同步脚本，默认从远程跟踪分支更新 submodule。
 - `cargo-feature-check.sh`：可选的项目声明式 Cargo feature matrix 运行器。
 - `cargo-package-check.sh`：运行 `cargo package --allow-dirty` 的本地打包验证脚本。
@@ -24,7 +25,7 @@
 把这些文件复制到 Rust 项目根目录：
 
 ```bash
-command cp align-ci.sh ci-check.sh update-submodule.sh cargo-feature-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
+command cp align-ci.sh ci-check.sh cargo-env.sh update-submodule.sh cargo-feature-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
 command cp .circleci/config.yml <project-root>/.circleci/config.yml
 ```
 
@@ -151,6 +152,8 @@ Cargo 默认 feature 选择，不额外检查其他 feature 组合。
 - `RS_CI_PROJECT_ROOT`：当这些脚本从其他目录运行时，用它指定 Rust 项目根目录。
 - `RS_CI_RUSTFMT_CONFIG`：rustfmt 配置路径；默认是运行中的 CI 脚本所在目录旁的 `rustfmt.toml`。
 - `RS_CI_CARGO_MATRIX_CONFIG`：可选 Cargo feature matrix 配置文件的项目相对路径；默认是 `.rs-ci-cargo-matrix.json`。
+- `RS_CI_CARGO_HOME_MODE`：本地脚本使用的 Cargo 缓存模式，可选 `shared` 或 `project`；默认是 `shared`。当需要并行运行多个 `rs-*` 仓库时，设为 `project` 可以避免共享 Cargo package cache 和 index 锁。
+- `RS_CI_CARGO_HOME_ROOT`：当 `RS_CI_CARGO_HOME_MODE=project` 时，per-project Cargo home 的根目录；默认是 `$XDG_CACHE_HOME/rs-ci/cargo-home` 或 `$HOME/.cache/rs-ci/cargo-home`。
 - `RUN_COVERAGE_CFG_CLIPPY`：设为 `1` 时，使用 `RUSTFLAGS="--cfg coverage"` 运行 clippy。
 - `RUN_COVERAGE_IN_ALIGN`：设为 `1` 时，从 `align-ci.sh` 运行 `coverage.sh json`；默认是 `0`。
 - `STYLE_SOURCE_DIR`：`style-check.sh` 检查的源码目录；默认是 `src`。

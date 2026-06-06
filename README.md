@@ -8,6 +8,7 @@ Shared scripts and CircleCI/GitHub Actions configuration for checking Rust code 
 
 - `align-ci.sh`: local auto-fix script for formatting and clippy.
 - `ci-check.sh`: local full CI parity check.
+- `cargo-env.sh`: shared Cargo environment setup used by local entry scripts.
 - `update-submodule.sh`: local submodule sync script that updates submodules from remote tracking branches by default.
 - `cargo-feature-check.sh`: optional project-declared Cargo feature matrix runner.
 - `cargo-package-check.sh`: local package verification script that runs `cargo package --allow-dirty`.
@@ -24,7 +25,7 @@ Shared scripts and CircleCI/GitHub Actions configuration for checking Rust code 
 Copy these files into the root of a Rust project:
 
 ```bash
-command cp align-ci.sh ci-check.sh update-submodule.sh cargo-feature-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
+command cp align-ci.sh ci-check.sh cargo-env.sh update-submodule.sh cargo-feature-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
 command cp .circleci/config.yml <project-root>/.circleci/config.yml
 ```
 
@@ -162,6 +163,8 @@ installation.
 - `RS_CI_PROJECT_ROOT`: Rust project root used when these scripts are run from another directory.
 - `RS_CI_RUSTFMT_CONFIG`: rustfmt configuration path; defaults to `rustfmt.toml` beside the running CI script.
 - `RS_CI_CARGO_MATRIX_CONFIG`: project-relative path to the optional Cargo feature matrix config; defaults to `.rs-ci-cargo-matrix.json`.
+- `RS_CI_CARGO_HOME_MODE`: Cargo cache mode for local scripts, either `shared` or `project`; defaults to `shared`. Use `project` when running multiple `rs-*` repositories in parallel to avoid shared Cargo package cache and index locks.
+- `RS_CI_CARGO_HOME_ROOT`: root directory for per-project Cargo homes when `RS_CI_CARGO_HOME_MODE=project`; defaults to `$XDG_CACHE_HOME/rs-ci/cargo-home` or `$HOME/.cache/rs-ci/cargo-home`.
 - `RUN_COVERAGE_CFG_CLIPPY`: set to `1` to run clippy with `RUSTFLAGS="--cfg coverage"`.
 - `RUN_COVERAGE_IN_ALIGN`: set to `1` to run `coverage.sh json` from `align-ci.sh`; defaults to `0`.
 - `STYLE_SOURCE_DIR`: source directory checked by `style-check.sh`; defaults to `src`.
