@@ -232,13 +232,10 @@ check_json_coverage() {
         | select(.filename | startswith($source_prefix))
         | .filename as $file
         | .summary as $summary
-        | (any(.segments[]?; (.[3] == true and .[2] == 0))) as $has_uncovered_region
         | select(
-            $has_uncovered_region and (
-                (($summary.functions.count > 0) and ($summary.functions.percent < $min_functions))
-                or (($summary.lines.count > 0) and ($summary.lines.percent <= $min_lines))
-                or (($summary.regions.count > 0) and ($summary.regions.percent <= $min_regions))
-            )
+            (($summary.functions.count > 0) and ($summary.functions.percent < $min_functions))
+            or (($summary.lines.count > 0) and ($summary.lines.percent <= $min_lines))
+            or (($summary.regions.count > 0) and ($summary.regions.percent <= $min_regions))
         )
         | "\($file): functions=\($summary.functions.percent)% (\($summary.functions.covered)/\($summary.functions.count)), lines=\($summary.lines.percent)% (\($summary.lines.covered)/\($summary.lines.count)), regions=\($summary.regions.percent)% (\($summary.regions.covered)/\($summary.regions.count))"
         ' "$coverage_json")
