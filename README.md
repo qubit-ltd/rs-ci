@@ -65,6 +65,17 @@ jobs:
 YAML
 ```
 
+The reusable workflow accepts `run_macos_tests`, a boolean input that defaults
+to `false`. Enable it only for crates with macOS-specific code paths:
+
+```yaml
+jobs:
+  rust-ci:
+    uses: qubit-ltd/rs-ci/.github/workflows/rust-ci.yml@main
+    with:
+      run_macos_tests: true
+```
+
 Add CI and coverage badges to the Rust project's README:
 
 ```markdown

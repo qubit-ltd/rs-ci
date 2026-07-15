@@ -65,6 +65,17 @@ jobs:
 YAML
 ```
 
+可复用 workflow 提供布尔输入 `run_macos_tests`，默认值为 `false`。只有包含
+macOS 专用代码路径的 crate 才需要显式启用：
+
+```yaml
+jobs:
+  rust-ci:
+    uses: qubit-ltd/rs-ci/.github/workflows/rust-ci.yml@main
+    with:
+      run_macos_tests: true
+```
+
 在 Rust 项目的 README 中加入 CI 和 coverage badge：
 
 ```markdown

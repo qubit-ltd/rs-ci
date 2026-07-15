@@ -38,6 +38,11 @@ on:
         required: false
         type: string
         default: ".rs-ci-cargo-matrix.json"
+      run_macos_tests:
+        description: Run clippy and tests on the pinned macOS runner.
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -655,3 +660,41 @@ jobs:
           $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
           cargo "+$env:RS_CI_BUILD_TOOLCHAIN" test --verbose
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  macos_test:
+    name: macOS test
+    if: ${{ inputs.run_macos_tests && github.event_name != 'schedule' }}
+    runs-on: macos-15
+    needs:
+      - fast_checks
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Restore cargo cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
+            ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
+          rustup component add clippy --toolchain "$RS_CI_BUILD_TOOLCHAIN"
+
+      - name: Run clippy on macOS
+        run: cargo +"$RS_CI_BUILD_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
+
+      - name: Build and test on macOS
+        run: cargo +"$RS_CI_BUILD_TOOLCHAIN" test --all-features --verbose
