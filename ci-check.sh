@@ -248,12 +248,12 @@ else
 fi
 echo ""
 
-print_step "6/11 Building documentation with warnings denied"
-if RUSTDOCFLAGS="-D warnings" cargo +"$RS_CI_BUILD_TOOLCHAIN" doc --no-deps --verbose > /dev/null 2>&1; then
+print_step "6/11 Building all-feature documentation with warnings and missing docs denied"
+if RUSTDOCFLAGS="-D warnings -D missing-docs" cargo +"$RS_CI_BUILD_TOOLCHAIN" doc --all-features --no-deps --verbose > /dev/null 2>&1; then
     print_success "Documentation build passed"
 else
     print_error "Documentation build failed"
-    RUSTDOCFLAGS="-D warnings" cargo +"$RS_CI_BUILD_TOOLCHAIN" doc --no-deps --verbose
+    RUSTDOCFLAGS="-D warnings -D missing-docs" cargo +"$RS_CI_BUILD_TOOLCHAIN" doc --all-features --no-deps --verbose
     exit 1
 fi
 echo ""
