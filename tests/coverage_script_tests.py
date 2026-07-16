@@ -81,6 +81,64 @@ def run_coverage(
 
 
 class CoverageScriptTests(unittest.TestCase):
+    def test_prints_summary_for_every_report_format(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "project"
+            root.mkdir()
+            write_project(root)
+            fake_bin = Path(tmp) / "bin"
+            fake_bin.mkdir()
+            log_path = Path(tmp) / "cargo.log"
+            write_fake_tools(fake_bin, log_path)
+
+            coverage_fixture = Path(tmp) / "coverage.json"
+            coverage_fixture.write_text(
+                json.dumps(
+                    {
+                        "data": [
+                            {
+                                "files": [
+                                    {
+                                        "filename": str(root / "src" / "lib.rs"),
+                                        "summary": {
+                                            "functions": {
+                                                "count": 1,
+                                                "covered": 1,
+                                                "percent": 100,
+                                            },
+                                            "lines": {
+                                                "count": 1,
+                                                "covered": 1,
+                                                "percent": 100,
+                                            },
+                                            "regions": {
+                                                "count": 1,
+                                                "covered": 1,
+                                                "percent": 100,
+                                            },
+                                        },
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            for report_format in ("html", "text", "lcov", "json", "cobertura", "all"):
+                with self.subTest(report_format=report_format):
+                    result = run_coverage(
+                        root,
+                        fake_bin,
+                        {"FAKE_COVERAGE_JSON": str(coverage_fixture)},
+                        report_format=report_format,
+                    )
+
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn("Coverage summary:", result.stdout)
+                    self.assertIn("lib.rs", result.stdout)
+
     def test_ignores_invalid_llvm_tool_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "project"
@@ -91,12 +149,19 @@ class CoverageScriptTests(unittest.TestCase):
             log_path = Path(tmp) / "cargo.log"
             write_fake_tools(fake_bin, log_path)
 
+            coverage_fixture = Path(tmp) / "coverage.json"
+            coverage_fixture.write_text(
+                json.dumps({"data": [{"files": []}]}),
+                encoding="utf-8",
+            )
+
             result = run_coverage(
                 root,
                 fake_bin,
                 {
                     "LLVM_COV": str(Path(tmp) / "missing-llvm-cov"),
                     "LLVM_PROFDATA": str(Path(tmp) / "missing-llvm-profdata"),
+                    "FAKE_COVERAGE_JSON": str(coverage_fixture),
                 },
             )
 
