@@ -33,6 +33,26 @@ on:
         required: false
         type: string
         default: "0.6.21"
+      cargo_fuzz_version:
+        description: cargo-fuzz version installed for conditional fuzz smoke checks.
+        required: false
+        type: string
+        default: "0.13.2"
+      cargo_fuzz_toolchain:
+        description: Nightly Rust toolchain used by cargo-fuzz.
+        required: false
+        type: string
+        default: nightly-2026-06-05
+      cargo_fuzz_mode:
+        description: "Conditional fuzz check mode: smoke, build-only, or disabled."
+        required: false
+        type: string
+        default: smoke
+      cargo_fuzz_seconds_per_target:
+        description: Maximum smoke fuzzing duration per target in seconds.
+        required: false
+        type: string
+        default: "10"
       cargo_feature_matrix_config:
         description: Project-relative path to optional Cargo feature matrix config.
         required: false
@@ -63,6 +83,10 @@ env:
   RS_CI_CLIPPY_TOOLCHAIN: ${{ inputs.rust_clippy_toolchain || inputs.rust_toolchain }}
   RUN_COVERAGE_CFG_CLIPPY: ${{ inputs.run_coverage_cfg_clippy }}
   CARGO_LLVM_COV_VERSION: ${{ inputs.cargo_llvm_cov_version }}
+  CARGO_FUZZ_VERSION: ${{ inputs.cargo_fuzz_version }}
+  RS_CI_FUZZ_TOOLCHAIN: ${{ inputs.cargo_fuzz_toolchain }}
+  RS_CI_FUZZ_MODE: ${{ inputs.cargo_fuzz_mode }}
+  RS_CI_FUZZ_SECONDS_PER_TARGET: ${{ inputs.cargo_fuzz_seconds_per_target }}
   RS_CI_CARGO_MATRIX_CONFIG: ${{ inputs.cargo_feature_matrix_config }}
 
 jobs:
@@ -117,6 +141,81 @@ jobs:
           else
             echo "RUN_COVERAGE_CFG_CLIPPY is not enabled"
           fi
+
+  fuzz_smoke:
+    name: Conditional cargo-fuzz smoke check
+    if: ${{ github.event_name != 'schedule' }}
+    runs-on: ubuntu-latest
+    needs:
+      - fast_checks
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Detect cargo-fuzz package
+        id: fuzz
+        run: |
+          set -euo pipefail
+          if [ -x .rs-ci/cargo-fuzz-check.sh ]; then
+            CHECKER=.rs-ci/cargo-fuzz-check.sh
+          elif [ -x ./cargo-fuzz-check.sh ]; then
+            CHECKER=./cargo-fuzz-check.sh
+          else
+            echo "cargo-fuzz-check.sh was not found" >&2
+            exit 1
+          fi
+          if [ "$RS_CI_FUZZ_MODE" = "disabled" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if RS_CI_PROJECT_ROOT="$PWD" "$CHECKER" --is-configured; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore cargo-fuzz cache
+        if: ${{ steps.fuzz.outputs.enabled == 'true' }}
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/bin/cargo-fuzz
+          key: ${{ runner.os }}-cargo-fuzz-${{ env.RS_CI_FUZZ_TOOLCHAIN }}-${{ env.CARGO_FUZZ_VERSION }}-${{ hashFiles('fuzz/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-fuzz-${{ env.RS_CI_FUZZ_TOOLCHAIN }}-${{ env.CARGO_FUZZ_VERSION }}-
+
+      - name: Install fuzz toolchain
+        if: ${{ steps.fuzz.outputs.enabled == 'true' }}
+        run: rustup toolchain install "$RS_CI_FUZZ_TOOLCHAIN" --profile minimal
+
+      - name: Install cargo-fuzz
+        if: ${{ steps.fuzz.outputs.enabled == 'true' }}
+        run: |
+          if ! command -v cargo-fuzz > /dev/null 2>&1; then
+            cargo install --locked cargo-fuzz --version "$CARGO_FUZZ_VERSION"
+          fi
+
+      - name: Run conditional cargo-fuzz smoke checks
+        run: |
+          set -euo pipefail
+          if [ -x .rs-ci/cargo-fuzz-check.sh ]; then
+            CHECKER=.rs-ci/cargo-fuzz-check.sh
+          else
+            CHECKER=./cargo-fuzz-check.sh
+          fi
+          RS_CI_PROJECT_ROOT="$PWD" "$CHECKER"
+
+      - name: Upload fuzz crash artifacts
+        if: ${{ failure() && steps.fuzz.outputs.enabled == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-artifacts-${{ github.sha }}
+          path: fuzz/artifacts
+          if-no-files-found: ignore
+          retention-days: 14
 
   prepare_cargo_feature_matrix:
     name: Prepare Cargo feature matrix

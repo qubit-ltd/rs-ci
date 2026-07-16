@@ -107,6 +107,59 @@ jobs:
             fi
       - save_cargo_cache
 
+  fuzz_smoke:
+    docker:
+      - image: rustlang/rust:nightly
+    environment:
+      CARGO_FUZZ_VERSION: "0.13.2"
+      RS_CI_FUZZ_TOOLCHAIN: nightly-2026-06-05
+      RS_CI_FUZZ_MODE: smoke
+      RS_CI_FUZZ_SECONDS_PER_TARGET: "10"
+    steps:
+      - checkout_https
+      - restore_cache:
+          keys:
+            - v1-cargo-fuzz-0.13.2-nightly-2026-06-05-{{ arch }}
+      - run:
+          name: Run conditional cargo-fuzz smoke checks
+          command: |
+            set -euo pipefail
+            if [ -x .rs-ci/cargo-fuzz-check.sh ]; then
+              CHECKER=.rs-ci/cargo-fuzz-check.sh
+            elif [ -x ./cargo-fuzz-check.sh ]; then
+              CHECKER=./cargo-fuzz-check.sh
+            else
+              echo "cargo-fuzz-check.sh was not found" >&2
+              exit 1
+            fi
+            if [ "$RS_CI_FUZZ_MODE" = "disabled" ]; then
+              echo "cargo-fuzz checks are disabled; skipping."
+              exit 0
+            fi
+            if ! RS_CI_PROJECT_ROOT="$PWD" "$CHECKER" --is-configured; then
+              echo "cargo-fuzz is not configured; skipping."
+              exit 0
+            fi
+            rustup toolchain install "$RS_CI_FUZZ_TOOLCHAIN" --profile minimal
+            if ! command -v cargo-fuzz > /dev/null 2>&1; then
+              cargo install --locked cargo-fuzz --version "$CARGO_FUZZ_VERSION"
+            fi
+            RS_CI_PROJECT_ROOT="$PWD" "$CHECKER"
+      - run:
+          name: Prepare fuzz artifact directory
+          when: on_fail
+          command: |
+            mkdir -p fuzz/artifacts
+            touch fuzz/artifacts/.rs-ci-artifact-placeholder
+      - save_cache:
+          key: v1-cargo-fuzz-0.13.2-nightly-2026-06-05-{{ arch }}
+          paths:
+            - "~/.cargo/bin/cargo-fuzz"
+      - store_artifacts:
+          path: fuzz/artifacts
+          destination: fuzz-artifacts
+          when: on_fail
+
   build_test_coverage:
     docker:
       - image: rustlang/rust:nightly
@@ -323,6 +376,9 @@ workflows:
     jobs:
       - fast_checks
       - build_test_coverage:
+          requires:
+            - fast_checks
+      - fuzz_smoke:
           requires:
             - fast_checks
       - windows_test:
