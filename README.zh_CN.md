@@ -11,6 +11,7 @@
 - `cargo-env.sh`：本地入口脚本共用的 Cargo 环境设置。
 - `update-submodule.sh`：本地 submodule 同步脚本，默认从远程跟踪分支更新 submodule。
 - `cargo-feature-check.sh`：可选的项目声明式 Cargo feature matrix 运行器。
+- `cargo-fuzz-check.sh`：按条件运行的 cargo-fuzz 构建与限时 smoke 测试脚本。
 - `cargo-package-check.sh`：运行 `cargo package --allow-dirty` 的本地打包验证脚本。
 - `readme-version-check.py`：README 依赖片段检查脚本，要求当前 crate 使用 `major.minor` 版本。
 - `style-check.sh`：检查 rustfmt 和 clippy 不覆盖的 Rust 源码布局约束。
@@ -25,7 +26,7 @@
 把这些文件复制到 Rust 项目根目录：
 
 ```bash
-command cp align-ci.sh ci-check.sh cargo-env.sh update-submodule.sh cargo-feature-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
+command cp align-ci.sh ci-check.sh cargo-env.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
 command cp .circleci/config.yml <project-root>/.circleci/config.yml
 ```
 
@@ -33,7 +34,7 @@ command cp .circleci/config.yml <project-root>/.circleci/config.yml
 
 ```bash
 cd <project-root>
-chmod +x align-ci.sh ci-check.sh update-submodule.sh cargo-feature-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh
+chmod +x align-ci.sh ci-check.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh
 ./style-check.sh
 ./ci-check.sh
 ```
@@ -105,6 +106,28 @@ workflow 不会自动提交生成的覆盖率文件。默认分支 `push` 会构
 GitHub Pages Actions 部署。pull request 和非默认分支只上传 `pages-preview`
 artifact。
 
+## 条件化 cargo-fuzz 检查
+
+`ci-check.sh`、可复用 GitHub Actions workflow 和 CircleCI 模板只会在
+`fuzz/Cargo.toml` 的 `[package.metadata]` 声明 `cargo-fuzz = true` 时自动启用
+cargo-fuzz。没有这个标准标记的项目会输出跳过信息，也不需要 nightly 工具链或
+`cargo-fuzz` 可执行程序。
+
+默认的 `RS_CI_FUZZ_MODE=smoke` 会构建 `cargo fuzz list` 报告的每个 target，并让
+每个 target 运行 `RS_CI_FUZZ_SECONDS_PER_TARGET=10` 秒。smoke 运行使用临时可写
+corpus；已提交的 `fuzz/corpus/<target>` 目录只作为 seed 输入。崩溃产物保留在
+`fuzz/artifacts/`，hosted CI 失败时会上传该目录。
+
+启用了 cargo-fuzz 的项目，在运行 `ci-check.sh` 前需要先安装本地工具：
+
+```bash
+cargo install cargo-fuzz
+```
+
+`RS_CI_FUZZ_MODE=build-only` 只编译 target 而不执行 libFuzzer，
+`RS_CI_FUZZ_MODE=disabled` 则显式跳过检查及其工具准备。hosted smoke 检查只在 Linux 上运行；
+更长时间的 fuzz campaign 应单独配置，不应放进常规 CI workflow。
+
 ## Cargo Feature Matrix
 
 默认情况下，CI 保持历史行为：Clippy 和测试使用 `--all-features`，文档构建使用
@@ -158,6 +181,9 @@ Cargo 默认 feature 选择，不额外检查其他 feature 组合。
 - `RS_CI_BUILD_TOOLCHAIN`：build、test、docs、package、coverage 和 audit 检查使用的工具链；默认是 `1.94.0`。
 - `RS_CI_FMT_TOOLCHAIN`：`rustfmt` 使用的工具链；默认是 `nightly-2026-06-05`。
 - `RS_CI_CLIPPY_TOOLCHAIN`：`clippy` 使用的工具链；默认是 `nightly-2026-06-05`。
+- `RS_CI_FUZZ_TOOLCHAIN`：`cargo-fuzz` 使用的 nightly 工具链；默认跟随配置的 lint nightly。
+- `RS_CI_FUZZ_MODE`：cargo-fuzz 检查模式，可选 `smoke`（默认）、`build-only` 或 `disabled`。
+- `RS_CI_FUZZ_SECONDS_PER_TARGET`：每个 fuzz target 的正整数 smoke 时长（秒）；默认是 `10`。
 - `RUST_TOOLCHAIN`：兼容旧配置的 fallback；当 `RS_CI_FMT_TOOLCHAIN` 和 `RS_CI_CLIPPY_TOOLCHAIN` 未设置时使用。
 - `RS_CI_UPDATE_TOOLCHAINS`：设为 `1` 时运行 `rustup toolchain update`；默认只安装缺失的工具链，不更新已安装工具链。
 - `RS_CI_PROJECT_ROOT`：当这些脚本从其他目录运行时，用它指定 Rust 项目根目录。

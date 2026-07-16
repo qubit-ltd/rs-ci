@@ -268,6 +268,14 @@ maybe_check_json_coverage() {
     fi
 }
 
+generate_json_coverage_summary() {
+    echo "Generating JSON coverage summary"
+    cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov report --package "$PACKAGE_NAME" \
+        --json --output-path target/llvm-cov/coverage.json \
+        --ignore-filename-regex "$EXCLUDE_PATTERN"
+    print_json_coverage_summary target/llvm-cov/coverage.json "$SOURCE_PREFIX"
+}
+
 CLEAN_FLAG=""
 FORMAT_ARG=""
 for arg in "$@"; do
@@ -301,12 +309,9 @@ case "$FORMAT_ARG" in
         ;;
 esac
 
-if [ "$FORMAT_ARG" = "json" ] || [ "$FORMAT_ARG" = "all" ]; then
-    require_command jq
-fi
-
 require_command cargo
 require_command cargo-llvm-cov
+require_command jq
 ignore_invalid_llvm_tool_overrides
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -364,6 +369,7 @@ case "$FORMAT_ARG" in
             "${html_open_args[@]}" \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
         echo "HTML report: target/llvm-cov/html/index.html"
+        generate_json_coverage_summary
         ;;
 
     text)
@@ -372,6 +378,7 @@ case "$FORMAT_ARG" in
             --ignore-filename-regex "$EXCLUDE_PATTERN" \
             | tee target/llvm-cov/coverage.txt
         echo "Text report: target/llvm-cov/coverage.txt"
+        generate_json_coverage_summary
         ;;
 
     lcov)
@@ -380,6 +387,7 @@ case "$FORMAT_ARG" in
             --lcov --output-path target/llvm-cov/lcov.info \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
         echo "LCOV report: target/llvm-cov/lcov.info"
+        generate_json_coverage_summary
         ;;
 
     json)
@@ -397,6 +405,7 @@ case "$FORMAT_ARG" in
             --cobertura --output-path target/llvm-cov/cobertura.xml \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
         echo "Cobertura report: target/llvm-cov/cobertura.xml"
+        generate_json_coverage_summary
         ;;
 
     all)
