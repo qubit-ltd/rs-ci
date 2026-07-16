@@ -11,6 +11,7 @@ Shared scripts and CircleCI/GitHub Actions configuration for checking Rust code 
 - `cargo-env.sh`: shared Cargo environment setup used by local entry scripts.
 - `update-submodule.sh`: local submodule sync script that updates submodules from remote tracking branches by default.
 - `cargo-feature-check.sh`: optional project-declared Cargo feature matrix runner.
+- `cargo-fuzz-check.sh`: conditional cargo-fuzz build and bounded smoke-test runner.
 - `cargo-package-check.sh`: local package verification script that runs `cargo package --allow-dirty`.
 - `readme-version-check.py`: README dependency snippet checker that enforces current-crate `major.minor` versions.
 - `style-check.sh`: project-specific Rust source layout checks that rustfmt and clippy do not cover.
@@ -25,7 +26,7 @@ Shared scripts and CircleCI/GitHub Actions configuration for checking Rust code 
 Copy these files into the root of a Rust project:
 
 ```bash
-command cp align-ci.sh ci-check.sh cargo-env.sh update-submodule.sh cargo-feature-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
+command cp align-ci.sh ci-check.sh cargo-env.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
 command cp .circleci/config.yml <project-root>/.circleci/config.yml
 ```
 
@@ -33,7 +34,7 @@ Then run:
 
 ```bash
 cd <project-root>
-chmod +x align-ci.sh ci-check.sh update-submodule.sh cargo-feature-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh
+chmod +x align-ci.sh ci-check.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh
 ./style-check.sh
 ./ci-check.sh
 ```
@@ -110,6 +111,31 @@ The workflow does not auto-commit generated coverage files. Default-branch
 `push` runs build the Pages site and deploy it through GitHub Pages Actions.
 Pull requests and non-default branches upload a `pages-preview` artifact only.
 
+## Conditional cargo-fuzz Checks
+
+`ci-check.sh`, the reusable GitHub Actions workflow, and the CircleCI template
+automatically enable cargo-fuzz only when `fuzz/Cargo.toml` declares
+`cargo-fuzz = true` in `[package.metadata]`. Projects without that conventional
+marker print a skip message and do not need a nightly toolchain or the
+`cargo-fuzz` executable.
+
+The default `RS_CI_FUZZ_MODE=smoke` builds each target reported by
+`cargo fuzz list` and runs it for `RS_CI_FUZZ_SECONDS_PER_TARGET=10` seconds.
+The smoke run uses a temporary writable corpus; a committed
+`fuzz/corpus/<target>` directory is used only as seed input. Crash artifacts
+remain in `fuzz/artifacts/` and are uploaded by hosted CI after a failure.
+
+For an enabled project, install the local tool before invoking `ci-check.sh`:
+
+```bash
+cargo install cargo-fuzz
+```
+
+`RS_CI_FUZZ_MODE=build-only` compiles targets without executing libFuzzer, and
+`RS_CI_FUZZ_MODE=disabled` skips the check and its tool setup explicitly. Hosted smoke checks run
+on Linux only; longer fuzzing campaigns should be configured separately from
+the normal CI workflow.
+
 ## Cargo Feature Matrix
 
 By default, CI keeps the historical behavior: Clippy and tests run with
@@ -169,6 +195,9 @@ installation.
 - `RS_CI_BUILD_TOOLCHAIN`: toolchain used for build, test, docs, package, coverage, and audit checks; defaults to `1.94.0`.
 - `RS_CI_FMT_TOOLCHAIN`: toolchain used for `rustfmt`; defaults to `nightly-2026-06-05`.
 - `RS_CI_CLIPPY_TOOLCHAIN`: toolchain used for `clippy`; defaults to `nightly-2026-06-05`.
+- `RS_CI_FUZZ_TOOLCHAIN`: nightly toolchain used by `cargo-fuzz`; defaults to the configured lint nightly.
+- `RS_CI_FUZZ_MODE`: cargo-fuzz check mode: `smoke` (default), `build-only`, or `disabled`.
+- `RS_CI_FUZZ_SECONDS_PER_TARGET`: positive smoke duration in seconds for each fuzz target; defaults to `10`.
 - `RUST_TOOLCHAIN`: deprecated fallback for `RS_CI_FMT_TOOLCHAIN` and `RS_CI_CLIPPY_TOOLCHAIN` when those variables are unset.
 - `RS_CI_UPDATE_TOOLCHAINS`: set to `1` to run `rustup toolchain update`; by default, scripts install missing toolchains but do not update installed ones.
 - `RS_CI_PROJECT_ROOT`: Rust project root used when these scripts are run from another directory.
