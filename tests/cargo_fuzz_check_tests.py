@@ -84,6 +84,7 @@ class CargoFuzzCheckTests(unittest.TestCase):
         targets: str = "",
         mode: str = "smoke",
         duration: str = "3",
+        max_len: str = "4096",
         include_cargo_fuzz: bool = True,
         extra_env: dict[str, str] | None = None,
     ) -> subprocess.CompletedProcess[str]:
@@ -92,11 +93,12 @@ class CargoFuzzCheckTests(unittest.TestCase):
         env = os.environ.copy()
         env.update(
             {
-                "PATH": f"{self.bin_dir}{os.pathsep}{env['PATH']}",
+                "PATH": f"{self.bin_dir}{os.pathsep}/usr/bin{os.pathsep}/bin",
                 "RS_CI_PROJECT_ROOT": str(self.project_root),
                 "RS_CI_FUZZ_MODE": mode,
                 "RS_CI_FUZZ_TOOLCHAIN": "nightly-test",
                 "RS_CI_FUZZ_SECONDS_PER_TARGET": duration,
+                "RS_CI_FUZZ_MAX_LEN": max_len,
                 "FAKE_FUZZ_TARGETS": targets,
                 "TMPDIR": str(self.tmp_dir),
             }
@@ -184,7 +186,16 @@ class CargoFuzzCheckTests(unittest.TestCase):
         self.assertIn("+nightly-test fuzz run alpha", log)
         self.assertIn("+nightly-test fuzz run beta", log)
         self.assertEqual(2, log.count("-max_total_time=3"))
+        self.assertEqual(2, log.count("-max_len=4096"))
         self.assertEqual([], list(self.tmp_dir.iterdir()))
+
+    def test_smoke_uses_configured_max_input_length(self) -> None:
+        write_fuzz_manifest(self.project_root)
+
+        result = self.run_checker(targets="alpha\n", max_len="16384")
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("-max_len=16384", self.command_log())
 
     def test_build_only_does_not_run_targets(self) -> None:
         write_fuzz_manifest(self.project_root)
@@ -219,6 +230,14 @@ class CargoFuzzCheckTests(unittest.TestCase):
 
         self.assertNotEqual(0, result.returncode)
         self.assertIn("RS_CI_FUZZ_SECONDS_PER_TARGET", result.stderr)
+
+    def test_rejects_non_positive_max_input_length(self) -> None:
+        write_fuzz_manifest(self.project_root)
+
+        result = self.run_checker(max_len="0")
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("RS_CI_FUZZ_MAX_LEN", result.stderr)
 
     def test_rejects_enabled_project_without_targets(self) -> None:
         write_fuzz_manifest(self.project_root)

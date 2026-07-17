@@ -18,6 +18,7 @@ PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
 RS_CI_FUZZ_MODE="${RS_CI_FUZZ_MODE:-smoke}"
 RS_CI_FUZZ_TOOLCHAIN="${RS_CI_FUZZ_TOOLCHAIN:-${RS_CI_FMT_TOOLCHAIN:-${RUST_TOOLCHAIN:-nightly-2026-06-05}}}"
 RS_CI_FUZZ_SECONDS_PER_TARGET="${RS_CI_FUZZ_SECONDS_PER_TARGET:-10}"
+RS_CI_FUZZ_MAX_LEN="${RS_CI_FUZZ_MAX_LEN:-4096}"
 TEMP_CORPUS=""
 
 cleanup() {
@@ -54,6 +55,10 @@ validate_configuration() {
         && ! [[ "$RS_CI_FUZZ_SECONDS_PER_TARGET" =~ ^[1-9][0-9]*$ ]]; then
         die "RS_CI_FUZZ_SECONDS_PER_TARGET must be a positive integer"
     fi
+    if [ "$RS_CI_FUZZ_MODE" = "smoke" ] \
+        && ! [[ "$RS_CI_FUZZ_MAX_LEN" =~ ^[1-9][0-9]*$ ]]; then
+        die "RS_CI_FUZZ_MAX_LEN must be a positive integer"
+    fi
 }
 
 require_cargo_fuzz() {
@@ -79,10 +84,12 @@ run_target() {
     echo "==> cargo fuzz run $target for ${RS_CI_FUZZ_SECONDS_PER_TARGET}s"
     if [ -d "$seed_corpus" ]; then
         cargo +"$RS_CI_FUZZ_TOOLCHAIN" fuzz run "$target" "$writable_corpus" "$seed_corpus" -- \
-            "-max_total_time=$RS_CI_FUZZ_SECONDS_PER_TARGET"
+            "-max_total_time=$RS_CI_FUZZ_SECONDS_PER_TARGET" \
+            "-max_len=$RS_CI_FUZZ_MAX_LEN"
     else
         cargo +"$RS_CI_FUZZ_TOOLCHAIN" fuzz run "$target" "$writable_corpus" -- \
-            "-max_total_time=$RS_CI_FUZZ_SECONDS_PER_TARGET"
+            "-max_total_time=$RS_CI_FUZZ_SECONDS_PER_TARGET" \
+            "-max_len=$RS_CI_FUZZ_MAX_LEN"
     fi
 }
 
