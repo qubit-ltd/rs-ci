@@ -115,6 +115,7 @@ jobs:
       RS_CI_FUZZ_TOOLCHAIN: nightly-2026-06-05
       RS_CI_FUZZ_MODE: smoke
       RS_CI_FUZZ_SECONDS_PER_TARGET: "10"
+      RS_CI_FUZZ_MAX_LEN: "4096"
     steps:
       - checkout_https
       - restore_cache:

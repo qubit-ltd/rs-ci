@@ -23,6 +23,8 @@ class FuzzWorkflowTests(unittest.TestCase):
             workflow,
         )
         self.assertIn("cargo_fuzz_seconds_per_target:", workflow)
+        self.assertIn("cargo_fuzz_max_len:", workflow)
+        self.assertIn("RS_CI_FUZZ_MAX_LEN", workflow)
         self.assertIn("fuzz_smoke:", workflow)
         self.assertIn("cargo-fuzz-check.sh", workflow)
         self.assertIn("--is-configured", workflow)
@@ -35,6 +37,7 @@ class FuzzWorkflowTests(unittest.TestCase):
 
         self.assertIn("fuzz_smoke:", config)
         self.assertIn('CARGO_FUZZ_VERSION: "0.13.2"', config)
+        self.assertIn('RS_CI_FUZZ_MAX_LEN: "4096"', config)
         self.assertIn("cargo-fuzz-check.sh", config)
         self.assertIn("--is-configured", config)
         self.assertIn('[ "$RS_CI_FUZZ_MODE" = "disabled" ]', config)
@@ -49,6 +52,7 @@ class FuzzWorkflowTests(unittest.TestCase):
             self.assertIn("RS_CI_FUZZ_MODE", content)
             self.assertIn("RS_CI_FUZZ_TOOLCHAIN", content)
             self.assertIn("RS_CI_FUZZ_SECONDS_PER_TARGET", content)
+            self.assertIn("RS_CI_FUZZ_MAX_LEN", content)
 
 
 if __name__ == "__main__":
