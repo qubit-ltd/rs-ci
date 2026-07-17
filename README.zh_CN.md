@@ -66,14 +66,15 @@ jobs:
 YAML
 ```
 
-可复用 workflow 提供布尔输入 `run_macos_tests`，默认值为 `false`。只有包含
-macOS 专用代码路径的 crate 才需要显式启用：
+可复用 workflow 提供布尔输入 `run_windows_tests` 和 `run_macos_tests`，两者的
+默认值均为 `false`。只有包含平台专用代码路径的 crate 才需要显式启用：
 
 ```yaml
 jobs:
   rust-ci:
     uses: qubit-ltd/rs-ci/.github/workflows/rust-ci.yml@main
     with:
+      run_windows_tests: true
       run_macos_tests: true
 ```
 
@@ -87,7 +88,7 @@ jobs:
 ## GitHub Actions 覆盖率输出
 
 可复用 workflow 保留现有格式化、clippy、debug build、doc test、README 依赖版本、
-test、release build、文档、打包验证、审计和 Windows 检查。覆盖率通过 `coverage.sh all` 生成，工具是
+test、release build、文档、打包验证、审计，以及可选的 Windows 和 macOS 检查。覆盖率通过 `coverage.sh all` 生成，工具是
 `cargo-llvm-cov`，由 `taiki-e/install-action` 安装。CI 中设置
 `COVERAGE_ENFORCE_THRESHOLDS=0`，初始接入阶段只报告覆盖率，不因阈值失败。
 覆盖率发布只使用 GitHub Actions summary、comment 和 artifact，不需要 Codecov 或

@@ -58,6 +58,11 @@ on:
         required: false
         type: string
         default: ".rs-ci-cargo-matrix.json"
+      run_windows_tests:
+        description: Run clippy and tests on the pinned Windows runner.
+        required: false
+        type: boolean
+        default: false
       run_macos_tests:
         description: Run clippy and tests on the pinned macOS runner.
         required: false
@@ -700,7 +705,7 @@ jobs:
 
   windows_test:
     name: Windows test
-    if: ${{ github.event_name != 'schedule' }}
+    if: ${{ inputs.run_windows_tests && github.event_name != 'schedule' }}
     runs-on: windows-2022
     needs:
       - fast_checks
