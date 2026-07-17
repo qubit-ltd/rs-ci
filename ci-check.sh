@@ -253,7 +253,7 @@ echo ""
 
 print_step "6/12 Running conditional cargo-fuzz smoke checks"
 require_executable_file "$SCRIPT_DIR/cargo-fuzz-check.sh"
-if [ "${RS_CI_FUZZ_MODE:-smoke}" != "disabled" \
+if [ "${RS_CI_FUZZ_MODE:-smoke}" != "disabled" ] \
     && RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/cargo-fuzz-check.sh" --is-configured; then
     ensure_toolchain "$RS_CI_FUZZ_TOOLCHAIN"
 fi
