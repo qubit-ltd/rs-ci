@@ -122,7 +122,8 @@ marker print a skip message and do not need a nightly toolchain or the
 `cargo-fuzz` executable.
 
 The default `RS_CI_FUZZ_MODE=smoke` builds each target reported by
-`cargo fuzz list` and runs it for `RS_CI_FUZZ_SECONDS_PER_TARGET=10` seconds.
+`cargo fuzz list` and runs it for `RS_CI_FUZZ_SECONDS_PER_TARGET=10` seconds
+with a maximum input length of `RS_CI_FUZZ_MAX_LEN=4096` bytes.
 The smoke run uses a temporary writable corpus; a committed
 `fuzz/corpus/<target>` directory is used only as seed input. Crash artifacts
 remain in `fuzz/artifacts/` and are uploaded by hosted CI after a failure.
@@ -200,6 +201,7 @@ installation.
 - `RS_CI_FUZZ_TOOLCHAIN`: nightly toolchain used by `cargo-fuzz`; defaults to the configured lint nightly.
 - `RS_CI_FUZZ_MODE`: cargo-fuzz check mode: `smoke` (default), `build-only`, or `disabled`.
 - `RS_CI_FUZZ_SECONDS_PER_TARGET`: positive smoke duration in seconds for each fuzz target; defaults to `10`.
+- `RS_CI_FUZZ_MAX_LEN`: positive maximum libFuzzer input length in bytes; defaults to `4096`.
 - `RUST_TOOLCHAIN`: deprecated fallback for `RS_CI_FMT_TOOLCHAIN` and `RS_CI_CLIPPY_TOOLCHAIN` when those variables are unset.
 - `RS_CI_UPDATE_TOOLCHAINS`: set to `1` to run `rustup toolchain update`; by default, scripts install missing toolchains but do not update installed ones.
 - `RS_CI_PROJECT_ROOT`: Rust project root used when these scripts are run from another directory.

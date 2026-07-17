@@ -53,6 +53,11 @@ on:
         required: false
         type: string
         default: "10"
+      cargo_fuzz_max_len:
+        description: Maximum libFuzzer input length in bytes.
+        required: false
+        type: string
+        default: "4096"
       cargo_feature_matrix_config:
         description: Project-relative path to optional Cargo feature matrix config.
         required: false
@@ -92,6 +97,7 @@ env:
   RS_CI_FUZZ_TOOLCHAIN: ${{ inputs.cargo_fuzz_toolchain }}
   RS_CI_FUZZ_MODE: ${{ inputs.cargo_fuzz_mode }}
   RS_CI_FUZZ_SECONDS_PER_TARGET: ${{ inputs.cargo_fuzz_seconds_per_target }}
+  RS_CI_FUZZ_MAX_LEN: ${{ inputs.cargo_fuzz_max_len }}
   RS_CI_CARGO_MATRIX_CONFIG: ${{ inputs.cargo_feature_matrix_config }}
 
 jobs:
