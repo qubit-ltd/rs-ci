@@ -215,7 +215,7 @@ installation.
 - `STYLE_TEST_DIR`: test directory checked by `style-check.sh`; defaults to `tests`.
 - `STYLE_ENFORCE_INLINE_TESTS`: set to `0` to allow `#[cfg(test)]` or `#[test]` in source files; defaults to `1`.
 - `STYLE_ENFORCE_TEST_FILE_NAMES`: set to `0` to disable test file naming checks; defaults to `1`.
-- `STYLE_ENFORCE_SOURCE_TEST_PAIRS`: set to `1` to require each concrete source file to have a matching `*_tests.rs` file; defaults to `0` because coverage thresholds are the primary guard for tested behavior.
+- `STYLE_ENFORCE_SOURCE_TEST_PAIRS`: set to `1` to require each concrete source file to have a matching `*_tests.rs` file. Standalone `style-check.sh` defaults to `0`, while `ci-check.sh` defaults to `1`; set it explicitly to `0` to disable the check in full CI.
 - `STYLE_ENFORCE_PUBLIC_TYPE_FILES`: set to `0` to disable public type file layout checks; defaults to `1`.
 - `STYLE_ENFORCE_EXPLICIT_IMPORTS`: set to `0` to allow wildcard imports and aggregation-only `mod.rs` private imports; defaults to `1`.
 - `STYLE_ENFORCE_AGGREGATION_FILES`: set to `0` to allow `lib.rs` and `mod.rs` to define items such as structs, traits, functions, impls, or macros; defaults to `1`.
