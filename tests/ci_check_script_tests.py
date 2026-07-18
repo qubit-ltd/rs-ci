@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import os
 import shlex
 import subprocess
 import tempfile
@@ -12,7 +11,7 @@ CI_CHECK_SCRIPT = REPO_ROOT / "ci-check.sh"
 
 
 class CiCheckScriptTests(unittest.TestCase):
-    def test_ci_check_enables_source_test_pairs_by_default_and_allows_override(
+    def test_ci_check_delegates_style_policy_without_rule_overrides(
         self,
     ) -> None:
         script = CI_CHECK_SCRIPT.read_text(encoding="utf-8")
@@ -25,43 +24,11 @@ class CiCheckScriptTests(unittest.TestCase):
         )
         style_block = script[block_start:block_end]
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            script_dir = Path(temp_dir)
-            checker = script_dir / "style-check.sh"
-            checker.write_text(
-                "#!/bin/sh\nprintf '%s\\n' "
-                '"${STYLE_ENFORCE_SOURCE_TEST_PAIRS:-unset}"\n',
-                encoding="utf-8",
-            )
-            checker.chmod(0o755)
-
-            outputs = []
-            for override in (None, "0"):
-                environment = os.environ.copy()
-                if override is None:
-                    environment.pop("STYLE_ENFORCE_SOURCE_TEST_PAIRS", None)
-                else:
-                    environment["STYLE_ENFORCE_SOURCE_TEST_PAIRS"] = override
-                harness = (
-                    f"SCRIPT_DIR={shlex.quote(str(script_dir))}\n"
-                    f"PROJECT_ROOT={shlex.quote(str(script_dir))}\n"
-                    "print_step() { :; }\n"
-                    "print_success() { :; }\n"
-                    'require_executable_file() { test -x "$1"; }\n'
-                    f"{style_block}\n"
-                )
-                result = subprocess.run(
-                    ["bash", "-c", harness],
-                    text=True,
-                    capture_output=True,
-                    check=False,
-                    env=environment,
-                )
-                self.assertEqual(0, result.returncode, result.stderr)
-                self.assertEqual("", result.stderr)
-                outputs.append(result.stdout)
-
-        self.assertEqual(["1\n", "0\n"], outputs)
+        self.assertIn(
+            'RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/style-check.sh"',
+            style_block,
+        )
+        self.assertNotIn("STYLE_ENFORCE_", style_block)
 
     def test_ci_check_ensures_fuzz_toolchain_when_configured(self) -> None:
         script = CI_CHECK_SCRIPT.read_text(encoding="utf-8")
