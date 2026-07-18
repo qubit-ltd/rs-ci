@@ -219,8 +219,7 @@ echo ""
 
 print_step "3/12 Running Rust style checks"
 require_executable_file "$SCRIPT_DIR/style-check.sh"
-STYLE_ENFORCE_SOURCE_TEST_PAIRS="${STYLE_ENFORCE_SOURCE_TEST_PAIRS:-1}" \
-    RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/style-check.sh"
+RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/style-check.sh"
 print_success "Rust style checks passed"
 echo ""
 
