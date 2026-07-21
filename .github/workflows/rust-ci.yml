@@ -3,26 +3,21 @@ name: Reusable Rust CI
 on:
   workflow_call:
     inputs:
-      rust_toolchain:
-        description: Deprecated fallback for Linux fmt and clippy toolchains.
-        required: false
-        type: string
-        default: nightly-2026-06-05
       rust_build_toolchain:
         description: Rust toolchain used for Linux build, test, docs, coverage, package, and audit jobs.
         required: false
         type: string
         default: "1.94.0"
       rust_fmt_toolchain:
-        description: Rust toolchain used for rustfmt. Defaults to rust_toolchain when empty.
+        description: Dated nightly Rust toolchain used for rustfmt.
         required: false
         type: string
-        default: ""
+        default: nightly-2026-06-05
       rust_clippy_toolchain:
-        description: Rust toolchain used for clippy. Defaults to rust_toolchain when empty.
+        description: Dated nightly Rust toolchain used for clippy.
         required: false
         type: string
-        default: ""
+        default: nightly-2026-06-05
       run_coverage_cfg_clippy:
         description: Set to 1 to run clippy again with RUSTFLAGS=--cfg coverage.
         required: false
@@ -87,10 +82,9 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  RUST_TOOLCHAIN: ${{ inputs.rust_toolchain }}
   RS_CI_BUILD_TOOLCHAIN: ${{ inputs.rust_build_toolchain }}
-  RS_CI_FMT_TOOLCHAIN: ${{ inputs.rust_fmt_toolchain || inputs.rust_toolchain }}
-  RS_CI_CLIPPY_TOOLCHAIN: ${{ inputs.rust_clippy_toolchain || inputs.rust_toolchain }}
+  RS_CI_FMT_TOOLCHAIN: ${{ inputs.rust_fmt_toolchain }}
+  RS_CI_CLIPPY_TOOLCHAIN: ${{ inputs.rust_clippy_toolchain }}
   RUN_COVERAGE_CFG_CLIPPY: ${{ inputs.run_coverage_cfg_clippy }}
   CARGO_LLVM_COV_VERSION: ${{ inputs.cargo_llvm_cov_version }}
   CARGO_FUZZ_VERSION: ${{ inputs.cargo_fuzz_version }}
@@ -128,6 +122,12 @@ jobs:
 
       - name: Install rustfmt and clippy
         run: |
+          if [ -f .rs-ci/toolchains.sh ]; then
+            TOOLCHAIN_CONTRACT=.rs-ci/toolchains.sh
+          else
+            TOOLCHAIN_CONTRACT=toolchains.sh
+          fi
+          bash "$TOOLCHAIN_CONTRACT"
           rustup toolchain install "$RS_CI_FMT_TOOLCHAIN" --profile minimal
           rustup component add rustfmt --toolchain "$RS_CI_FMT_TOOLCHAIN"
           rustup toolchain install "$RS_CI_CLIPPY_TOOLCHAIN" --profile minimal

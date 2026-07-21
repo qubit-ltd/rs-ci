@@ -71,7 +71,7 @@ commands:
 jobs:
   fast_checks:
     docker:
-      - image: rustlang/rust:nightly
+      - image: rust:1.94.0
     environment:
       RS_CI_FMT_TOOLCHAIN: nightly-2026-06-05
       RS_CI_CLIPPY_TOOLCHAIN: nightly-2026-06-05
@@ -81,6 +81,12 @@ jobs:
       - run:
           name: Install rustfmt and clippy
           command: |
+            if [ -f .rs-ci/toolchains.sh ]; then
+              TOOLCHAIN_CONTRACT=.rs-ci/toolchains.sh
+            else
+              TOOLCHAIN_CONTRACT=toolchains.sh
+            fi
+            bash "$TOOLCHAIN_CONTRACT"
             rustup toolchain install "$RS_CI_FMT_TOOLCHAIN" --profile minimal
             rustup component add rustfmt --toolchain "$RS_CI_FMT_TOOLCHAIN"
             rustup toolchain install "$RS_CI_CLIPPY_TOOLCHAIN" --profile minimal
@@ -109,7 +115,7 @@ jobs:
 
   fuzz_smoke:
     docker:
-      - image: rustlang/rust:nightly
+      - image: rust:1.94.0
     environment:
       CARGO_FUZZ_VERSION: "0.13.2"
       RS_CI_FUZZ_TOOLCHAIN: nightly-2026-06-05
@@ -163,7 +169,7 @@ jobs:
 
   build_test_coverage:
     docker:
-      - image: rustlang/rust:nightly
+      - image: rust:1.94.0
     resource_class: medium+
     environment:
       RS_CI_BUILD_TOOLCHAIN: "1.94.0"
@@ -272,7 +278,7 @@ jobs:
 
   doc:
     docker:
-      - image: rustlang/rust:nightly
+      - image: rust:1.94.0
     environment:
       RS_CI_BUILD_TOOLCHAIN: "1.94.0"
     steps:
@@ -292,7 +298,7 @@ jobs:
 
   security_audit:
     docker:
-      - image: rustlang/rust:nightly
+      - image: rust:1.94.0
     environment:
       RS_CI_BUILD_TOOLCHAIN: "1.94.0"
     steps:
