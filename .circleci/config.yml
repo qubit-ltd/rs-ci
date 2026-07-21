@@ -167,6 +167,32 @@ jobs:
           destination: fuzz-artifacts
           when: on_fail
 
+  loom:
+    docker:
+      - image: rust:1.94.0
+    environment:
+      RS_CI_BUILD_TOOLCHAIN: "1.94.0"
+    steps:
+      - checkout_https
+      - run:
+          name: Conditional Loom model checks
+          command: |
+            set -euo pipefail
+            if [ -x .rs-ci/cargo-loom-check.sh ]; then
+              CHECKER=.rs-ci/cargo-loom-check.sh
+            elif [ -x ./cargo-loom-check.sh ]; then
+              CHECKER=./cargo-loom-check.sh
+            else
+              echo "cargo-loom-check.sh was not found" >&2
+              exit 1
+            fi
+            if ! RS_CI_PROJECT_ROOT="$PWD" "$CHECKER" --is-configured; then
+              echo "loom is not configured; skipping."
+              exit 0
+            fi
+            rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
+            RS_CI_PROJECT_ROOT="$PWD" "$CHECKER"
+
   build_test_coverage:
     docker:
       - image: rust:1.94.0
@@ -386,6 +412,9 @@ workflows:
           requires:
             - fast_checks
       - fuzz_smoke:
+          requires:
+            - fast_checks
+      - loom:
           requires:
             - fast_checks
       - windows_test:

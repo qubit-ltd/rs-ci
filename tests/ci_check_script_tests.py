@@ -16,7 +16,7 @@ class CiCheckScriptTests(unittest.TestCase):
     ) -> None:
         script = CI_CHECK_SCRIPT.read_text(encoding="utf-8")
         block_start = script.index(
-            'print_step "3/12 Running Rust style checks"'
+            'print_step "3/13 Running Rust style checks"'
         )
         block_end = script.index(
             'print_success "Rust style checks passed"',
@@ -74,18 +74,34 @@ class CiCheckScriptTests(unittest.TestCase):
         )
         self.assertIn("configure_rs_ci_toolchains", script)
         self.assertIn(
-            'print_step "6/12 Running conditional cargo-fuzz smoke checks"',
+            'print_step "6/13 Running conditional cargo-fuzz smoke checks"',
             script,
         )
         self.assertIn('ensure_toolchain "$RS_CI_FUZZ_TOOLCHAIN"', script)
         self.assertIn('"${RS_CI_FUZZ_MODE:-smoke}" != "disabled"', script)
         self.assertIn('"$SCRIPT_DIR/cargo-fuzz-check.sh"', script)
         self.assertIn(
-            'print_step "7/12 Building all-feature documentation',
+            'print_step "8/13 Building all-feature documentation',
             script,
         )
-        self.assertNotIn('2b/11 Running Clippy checks', script)
-        self.assertIn('2b/12 Running Clippy checks', script)
+        self.assertNotIn('2b/12 Running Clippy checks', script)
+        self.assertIn('2b/13 Running Clippy checks', script)
+
+    def test_ci_check_runs_conditional_loom_after_fuzz(self) -> None:
+        script = CI_CHECK_SCRIPT.read_text(encoding="utf-8")
+
+        fuzz_step = script.index(
+            'print_step "6/13 Running conditional cargo-fuzz smoke checks"'
+        )
+        self.assertIn(
+            'print_step "7/13 Running conditional Loom model checks"',
+            script,
+        )
+        loom_step = script.index(
+            'print_step "7/13 Running conditional Loom model checks"'
+        )
+        self.assertGreater(loom_step, fuzz_step)
+        self.assertIn('"$SCRIPT_DIR/cargo-loom-check.sh"', script)
 
     def test_documentation_build_checks_all_features_and_missing_docs(self) -> None:
         script = CI_CHECK_SCRIPT.read_text(encoding="utf-8")

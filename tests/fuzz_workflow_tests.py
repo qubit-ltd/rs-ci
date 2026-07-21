@@ -45,7 +45,18 @@ class FuzzWorkflowTests(unittest.TestCase):
         self.assertIn("Prepare fuzz artifact directory", config)
         self.assertIn("fuzz/artifacts", config)
 
-    def test_readmes_document_conditional_cargo_fuzz(self) -> None:
+    def test_hosted_workflows_have_conditional_loom_jobs(self) -> None:
+        workflow = GITHUB_WORKFLOW.read_text(encoding="utf-8")
+        config = CIRCLECI_CONFIG.read_text(encoding="utf-8")
+
+        self.assertIn("  loom:\n", workflow)
+        self.assertIn("Conditional Loom model checks", workflow)
+        self.assertIn("cargo-loom-check.sh", workflow)
+        self.assertIn("  loom:\n", config)
+        self.assertIn("Conditional Loom model checks", config)
+        self.assertIn("cargo-loom-check.sh", config)
+
+    def test_readmes_document_conditional_cargo_fuzz_and_loom(self) -> None:
         for readme in (README, README_ZH_CN):
             content = readme.read_text(encoding="utf-8")
             self.assertIn("cargo-fuzz-check.sh", content)
@@ -53,6 +64,9 @@ class FuzzWorkflowTests(unittest.TestCase):
             self.assertIn("RS_CI_FUZZ_TOOLCHAIN", content)
             self.assertIn("RS_CI_FUZZ_SECONDS_PER_TARGET", content)
             self.assertIn("RS_CI_FUZZ_MAX_LEN", content)
+            self.assertIn("cargo-loom-check.sh", content)
+            self.assertIn("[dev-dependencies]", content)
+            self.assertIn('RUSTFLAGS="--cfg loom"', content)
 
 
 if __name__ == "__main__":

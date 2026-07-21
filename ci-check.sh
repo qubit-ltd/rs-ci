@@ -189,7 +189,7 @@ if [ "${RS_CI_CARGO_HOME_MODE:-project}" = "project" ]; then
 fi
 echo ""
 
-print_step "1/12 Checking code format (cargo +$RS_CI_FMT_TOOLCHAIN fmt -- --check --config-path $RUSTFMT_CONFIG)"
+print_step "1/13 Checking code format (cargo +$RS_CI_FMT_TOOLCHAIN fmt -- --check --config-path $RUSTFMT_CONFIG)"
 ensure_lint_toolchains
 print_rs_ci_lint_versions
 if cargo +"$RS_CI_FMT_TOOLCHAIN" fmt -- --check --config-path "$RUSTFMT_CONFIG" > /dev/null 2>&1; then
@@ -203,22 +203,22 @@ else
 fi
 echo ""
 
-print_step "2/12 Running Clippy checks (cargo +$RS_CI_CLIPPY_TOOLCHAIN clippy)"
+print_step "2/13 Running Clippy checks (cargo +$RS_CI_CLIPPY_TOOLCHAIN clippy)"
 run_clippy
 if [ "$RUN_COVERAGE_CFG_CLIPPY" = "1" ]; then
-    print_step "2b/12 Running Clippy checks with RUSTFLAGS=--cfg coverage"
+    print_step "2b/13 Running Clippy checks with RUSTFLAGS=--cfg coverage"
     RUSTFLAGS="--cfg coverage" cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
     print_success "Coverage cfg clippy checks passed"
 fi
 echo ""
 
-print_step "3/12 Running Rust style checks"
+print_step "3/13 Running Rust style checks"
 require_executable_file "$SCRIPT_DIR/style-check.sh"
 RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/style-check.sh"
 print_success "Rust style checks passed"
 echo ""
 
-print_step "4/12 Building project (cargo +$RS_CI_BUILD_TOOLCHAIN)"
+print_step "4/13 Building project (cargo +$RS_CI_BUILD_TOOLCHAIN)"
 ensure_build_toolchain
 if cargo +"$RS_CI_BUILD_TOOLCHAIN" build --verbose > /dev/null 2>&1; then
     print_success "Debug build succeeded"
@@ -237,7 +237,7 @@ else
 fi
 echo ""
 
-print_step "5/12 Running tests (cargo +$RS_CI_BUILD_TOOLCHAIN test --all-features)"
+print_step "5/13 Running tests (cargo +$RS_CI_BUILD_TOOLCHAIN test --all-features)"
 if cargo +"$RS_CI_BUILD_TOOLCHAIN" test --all-features --verbose; then
     print_success "All tests passed"
 else
@@ -246,7 +246,7 @@ else
 fi
 echo ""
 
-print_step "6/12 Running conditional cargo-fuzz smoke checks"
+print_step "6/13 Running conditional cargo-fuzz smoke checks"
 require_executable_file "$SCRIPT_DIR/cargo-fuzz-check.sh"
 if [ "${RS_CI_FUZZ_MODE:-smoke}" != "disabled" ] \
     && RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/cargo-fuzz-check.sh" --is-configured; then
@@ -256,7 +256,13 @@ RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/cargo-fuzz-check.sh"
 print_success "Conditional cargo-fuzz checks passed"
 echo ""
 
-print_step "7/12 Building all-feature documentation with warnings and missing docs denied"
+print_step "7/13 Running conditional Loom model checks"
+require_executable_file "$SCRIPT_DIR/cargo-loom-check.sh"
+RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/cargo-loom-check.sh"
+print_success "Conditional Loom model checks passed"
+echo ""
+
+print_step "8/13 Building all-feature documentation with warnings and missing docs denied"
 if RUSTDOCFLAGS="-D warnings -D missing-docs" cargo +"$RS_CI_BUILD_TOOLCHAIN" doc --all-features --no-deps --verbose > /dev/null 2>&1; then
     print_success "Documentation build passed"
 else
@@ -266,14 +272,14 @@ else
 fi
 echo ""
 
-print_step "8/12 Checking README dependency versions"
+print_step "9/13 Checking README dependency versions"
 require_command python3
 require_executable_file "$SCRIPT_DIR/readme-version-check.py"
 RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/readme-version-check.py"
 print_success "README dependency versions passed"
 echo ""
 
-print_step "9/12 Running configured Cargo feature matrix"
+print_step "10/13 Running configured Cargo feature matrix"
 MATRIX_CONFIG_NAME="${RS_CI_CARGO_MATRIX_CONFIG:-.rs-ci-cargo-matrix.json}"
 if [[ "$MATRIX_CONFIG_NAME" = /* ]]; then
     MATRIX_CONFIG_FILE="$MATRIX_CONFIG_NAME"
@@ -291,13 +297,13 @@ fi
 print_success "Configured Cargo feature matrix checks passed"
 echo ""
 
-print_step "10/12 Verifying Cargo package"
+print_step "11/13 Verifying Cargo package"
 require_executable_file "$SCRIPT_DIR/cargo-package-check.sh"
 RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/cargo-package-check.sh"
 print_success "Cargo package verification passed"
 echo ""
 
-print_step "11/12 Generating and checking JSON coverage report"
+print_step "12/13 Generating and checking JSON coverage report"
 require_command cargo-llvm-cov
 require_command jq
 ensure_llvm_tools
@@ -305,7 +311,7 @@ RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/coverage.sh" json
 print_success "Coverage report passed thresholds"
 echo ""
 
-print_step "12/12 Running security audit"
+print_step "13/13 Running security audit"
 require_command cargo-audit
 run_security_audit
 echo ""

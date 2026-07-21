@@ -228,6 +228,57 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  loom:
+    name: Conditional Loom model checks
+    if: ${{ github.event_name != 'schedule' }}
+    runs-on: ubuntu-latest
+    needs:
+      - fast_checks
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Detect Loom model tests
+        id: loom
+        run: |
+          set -euo pipefail
+          if [ -x .rs-ci/cargo-loom-check.sh ]; then
+            CHECKER=.rs-ci/cargo-loom-check.sh
+          elif [ -x ./cargo-loom-check.sh ]; then
+            CHECKER=./cargo-loom-check.sh
+          else
+            echo "cargo-loom-check.sh was not found" >&2
+            exit 1
+          fi
+          if RS_CI_PROJECT_ROOT="$PWD" "$CHECKER" --is-configured; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Loom test toolchain
+        if: ${{ steps.loom.outputs.enabled == 'true' }}
+        run: rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
+
+      - name: Run conditional Loom model checks
+        if: ${{ steps.loom.outputs.enabled == 'true' }}
+        run: |
+          set -euo pipefail
+          if [ -x .rs-ci/cargo-loom-check.sh ]; then
+            CHECKER=.rs-ci/cargo-loom-check.sh
+          else
+            CHECKER=./cargo-loom-check.sh
+          fi
+          RS_CI_PROJECT_ROOT="$PWD" "$CHECKER"
+
+      - name: Skip unconfigured Loom model tests
+        if: ${{ steps.loom.outputs.enabled != 'true' }}
+        run: echo "loom is not configured; skipping."
+
   prepare_cargo_feature_matrix:
     name: Prepare Cargo feature matrix
     if: ${{ github.event_name != 'schedule' }}

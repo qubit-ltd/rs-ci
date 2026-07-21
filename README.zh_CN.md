@@ -12,6 +12,7 @@
 - `update-submodule.sh`：本地 submodule 同步脚本，默认从远程跟踪分支更新 submodule。
 - `cargo-feature-check.sh`：可选的项目声明式 Cargo feature matrix 运行器。
 - `cargo-fuzz-check.sh`：按条件运行的 cargo-fuzz 构建与限时 smoke 测试脚本。
+- `cargo-loom-check.sh`：按条件运行的 Loom 模型测试脚本。
 - `cargo-package-check.sh`：运行 `cargo package --allow-dirty` 的本地打包验证脚本。
 - `readme-version-check.py`：README 依赖片段检查脚本，要求当前 crate 使用 `major.minor` 版本。
 - `style-check.sh`：检查 rustfmt 和 clippy 不覆盖的 Rust 源码布局约束。
@@ -26,7 +27,7 @@
 把这些文件复制到 Rust 项目根目录：
 
 ```bash
-command cp align-ci.sh ci-check.sh cargo-env.sh toolchains.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
+command cp align-ci.sh ci-check.sh cargo-env.sh toolchains.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
 command cp .circleci/config.yml <project-root>/.circleci/config.yml
 ```
 
@@ -34,7 +35,7 @@ command cp .circleci/config.yml <project-root>/.circleci/config.yml
 
 ```bash
 cd <project-root>
-chmod +x align-ci.sh ci-check.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh
+chmod +x align-ci.sh ci-check.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh
 ./style-check.sh
 ./ci-check.sh
 ```
@@ -129,6 +130,21 @@ cargo install cargo-fuzz
 `RS_CI_FUZZ_MODE=build-only` 只编译 target 而不执行 libFuzzer，
 `RS_CI_FUZZ_MODE=disabled` 则显式跳过检查及其工具准备。hosted smoke 检查只在 Linux 上运行；
 更长时间的 fuzz campaign 应单独配置，不应放进常规 CI workflow。
+
+## 条件化 Loom 模型检查
+
+`ci-check.sh`、可复用 GitHub Actions workflow 和 CircleCI 模板仅在项目根目录
+`Cargo.toml` 的 `[dev-dependencies]` 中声明 `loom` 时运行 Loom 模型测试。未声明
+该依赖的项目会输出跳过信息，也不会安装额外的 Rust 工具链。
+
+启用后，检查会运行：
+
+```bash
+RUSTFLAGS="--cfg loom" cargo test --release --all-features
+```
+
+`loom` 配置标志会启用 `#[cfg(loom)]` 守卫的测试；release profile 可降低模型探索
+成本。hosted Loom 检查只在 Linux 上运行。
 
 ## Cargo Feature Matrix
 

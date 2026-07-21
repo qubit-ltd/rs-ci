@@ -12,6 +12,7 @@ Shared scripts and CircleCI/GitHub Actions configuration for checking Rust code 
 - `update-submodule.sh`: local submodule sync script that updates submodules from remote tracking branches by default.
 - `cargo-feature-check.sh`: optional project-declared Cargo feature matrix runner.
 - `cargo-fuzz-check.sh`: conditional cargo-fuzz build and bounded smoke-test runner.
+- `cargo-loom-check.sh`: conditional Loom model-test runner.
 - `cargo-package-check.sh`: local package verification script that runs `cargo package --allow-dirty`.
 - `readme-version-check.py`: README dependency snippet checker that enforces current-crate `major.minor` versions.
 - `style-check.sh`: project-specific Rust source layout checks that rustfmt and clippy do not cover.
@@ -26,7 +27,7 @@ Shared scripts and CircleCI/GitHub Actions configuration for checking Rust code 
 Copy these files into the root of a Rust project:
 
 ```bash
-command cp align-ci.sh ci-check.sh cargo-env.sh toolchains.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
+command cp align-ci.sh ci-check.sh cargo-env.sh toolchains.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
 command cp .circleci/config.yml <project-root>/.circleci/config.yml
 ```
 
@@ -34,7 +35,7 @@ Then run:
 
 ```bash
 cd <project-root>
-chmod +x align-ci.sh ci-check.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh
+chmod +x align-ci.sh ci-check.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh
 ./style-check.sh
 ./ci-check.sh
 ```
@@ -138,6 +139,23 @@ cargo install cargo-fuzz
 `RS_CI_FUZZ_MODE=disabled` skips the check and its tool setup explicitly. Hosted smoke checks run
 on Linux only; longer fuzzing campaigns should be configured separately from
 the normal CI workflow.
+
+## Conditional Loom Model Checks
+
+`ci-check.sh`, the reusable GitHub Actions workflow, and the CircleCI template
+run Loom model tests only when the project root `Cargo.toml` declares `loom` in
+`[dev-dependencies]`. Projects without that dependency print a skip message and
+do not install an additional Rust toolchain.
+
+For an enabled project, the check runs:
+
+```bash
+RUSTFLAGS="--cfg loom" cargo test --release --all-features
+```
+
+The `loom` configuration flag enables tests guarded by `#[cfg(loom)]`; the
+release profile reduces the cost of model exploration. Hosted Loom checks run
+on Linux only.
 
 ## Cargo Feature Matrix
 
