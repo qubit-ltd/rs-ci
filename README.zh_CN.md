@@ -26,7 +26,7 @@
 把这些文件复制到 Rust 项目根目录：
 
 ```bash
-command cp align-ci.sh ci-check.sh cargo-env.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
+command cp align-ci.sh ci-check.sh cargo-env.sh toolchains.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
 command cp .circleci/config.yml <project-root>/.circleci/config.yml
 ```
 
@@ -183,12 +183,15 @@ Cargo 默认 feature 选择，不额外检查其他 feature 组合。
 - `RS_CI_BUILD_TOOLCHAIN`：build、test、docs、package、coverage 和 audit 检查使用的工具链；默认是 `1.94.0`。
 - `RS_CI_FMT_TOOLCHAIN`：`rustfmt` 使用的工具链；默认是 `nightly-2026-06-05`。
 - `RS_CI_CLIPPY_TOOLCHAIN`：`clippy` 使用的工具链；默认是 `nightly-2026-06-05`。
-- `RS_CI_FUZZ_TOOLCHAIN`：`cargo-fuzz` 使用的 nightly 工具链；默认跟随配置的 lint nightly。
+- `RS_CI_FUZZ_TOOLCHAIN`：`cargo-fuzz` 使用的 nightly 工具链；默认是 `nightly-2026-06-05`。
 - `RS_CI_FUZZ_MODE`：cargo-fuzz 检查模式，可选 `smoke`（默认）、`build-only` 或 `disabled`。
 - `RS_CI_FUZZ_SECONDS_PER_TARGET`：每个 fuzz target 的正整数 smoke 时长（秒）；默认是 `10`。
 - `RS_CI_FUZZ_MAX_LEN`：libFuzzer 输入的正整数最大字节数；默认是 `4096`。
-- `RUST_TOOLCHAIN`：兼容旧配置的 fallback；当 `RS_CI_FMT_TOOLCHAIN` 和 `RS_CI_CLIPPY_TOOLCHAIN` 未设置时使用。
 - `RS_CI_UPDATE_TOOLCHAINS`：设为 `1` 时运行 `rustup toolchain update`；默认只安装缺失的工具链，不更新已安装工具链。
+
+所有 nightly 覆盖值都必须使用 `nightly-YYYY-MM-DD` 格式。脚本会在运行
+Cargo 命令之前拒绝浮动的 `nightly`，共享默认值统一定义在 `toolchains.sh`。
+
 - `RS_CI_PROJECT_ROOT`：当这些脚本从其他目录运行时，用它指定 Rust 项目根目录。
 - `RS_CI_RUSTFMT_CONFIG`：rustfmt 配置路径；默认是运行中的 CI 脚本所在目录旁的 `rustfmt.toml`。
 - `RS_CI_CARGO_MATRIX_CONFIG`：可选 Cargo feature matrix 配置文件的项目相对路径；默认是 `.rs-ci-cargo-matrix.json`。

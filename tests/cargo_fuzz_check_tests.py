@@ -96,7 +96,7 @@ class CargoFuzzCheckTests(unittest.TestCase):
                 "PATH": f"{self.bin_dir}{os.pathsep}/usr/bin{os.pathsep}/bin",
                 "RS_CI_PROJECT_ROOT": str(self.project_root),
                 "RS_CI_FUZZ_MODE": mode,
-                "RS_CI_FUZZ_TOOLCHAIN": "nightly-test",
+                "RS_CI_FUZZ_TOOLCHAIN": "nightly-2099-01-01",
                 "RS_CI_FUZZ_SECONDS_PER_TARGET": duration,
                 "RS_CI_FUZZ_MAX_LEN": max_len,
                 "FAKE_FUZZ_TARGETS": targets,
@@ -180,11 +180,11 @@ class CargoFuzzCheckTests(unittest.TestCase):
 
         self.assertEqual(0, result.returncode, result.stderr)
         log = self.command_log()
-        self.assertIn("+nightly-test fuzz list", log)
-        self.assertIn("+nightly-test fuzz build alpha", log)
-        self.assertIn("+nightly-test fuzz build beta", log)
-        self.assertIn("+nightly-test fuzz run alpha", log)
-        self.assertIn("+nightly-test fuzz run beta", log)
+        self.assertIn("+nightly-2099-01-01 fuzz list", log)
+        self.assertIn("+nightly-2099-01-01 fuzz build alpha", log)
+        self.assertIn("+nightly-2099-01-01 fuzz build beta", log)
+        self.assertIn("+nightly-2099-01-01 fuzz run alpha", log)
+        self.assertIn("+nightly-2099-01-01 fuzz run beta", log)
         self.assertEqual(2, log.count("-max_total_time=3"))
         self.assertEqual(2, log.count("-max_len=4096"))
         self.assertEqual([], list(self.tmp_dir.iterdir()))
@@ -204,7 +204,7 @@ class CargoFuzzCheckTests(unittest.TestCase):
 
         self.assertEqual(0, result.returncode, result.stderr)
         log = self.command_log()
-        self.assertIn("+nightly-test fuzz build alpha", log)
+        self.assertIn("+nightly-2099-01-01 fuzz build alpha", log)
         self.assertNotIn("fuzz run", log)
 
     def test_enabled_project_requires_cargo_fuzz_executable(self) -> None:
@@ -256,7 +256,7 @@ class CargoFuzzCheckTests(unittest.TestCase):
         )
 
         self.assertEqual(17, result.returncode)
-        self.assertIn("+nightly-test fuzz build alpha", self.command_log())
+        self.assertIn("+nightly-2099-01-01 fuzz build alpha", self.command_log())
 
     def test_propagates_target_run_failure(self) -> None:
         write_fuzz_manifest(self.project_root)
@@ -267,7 +267,7 @@ class CargoFuzzCheckTests(unittest.TestCase):
         )
 
         self.assertEqual(19, result.returncode)
-        self.assertIn("+nightly-test fuzz run alpha", self.command_log())
+        self.assertIn("+nightly-2099-01-01 fuzz run alpha", self.command_log())
 
     def test_uses_committed_seed_corpus_without_retaining_temporary_corpus(self) -> None:
         write_fuzz_manifest(self.project_root)
