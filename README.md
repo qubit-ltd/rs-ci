@@ -26,7 +26,7 @@ Shared scripts and CircleCI/GitHub Actions configuration for checking Rust code 
 Copy these files into the root of a Rust project:
 
 ```bash
-command cp align-ci.sh ci-check.sh cargo-env.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
+command cp align-ci.sh ci-check.sh cargo-env.sh toolchains.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
 command cp .circleci/config.yml <project-root>/.circleci/config.yml
 ```
 
@@ -198,12 +198,16 @@ installation.
 - `RS_CI_BUILD_TOOLCHAIN`: toolchain used for build, test, docs, package, coverage, and audit checks; defaults to `1.94.0`.
 - `RS_CI_FMT_TOOLCHAIN`: toolchain used for `rustfmt`; defaults to `nightly-2026-06-05`.
 - `RS_CI_CLIPPY_TOOLCHAIN`: toolchain used for `clippy`; defaults to `nightly-2026-06-05`.
-- `RS_CI_FUZZ_TOOLCHAIN`: nightly toolchain used by `cargo-fuzz`; defaults to the configured lint nightly.
+- `RS_CI_FUZZ_TOOLCHAIN`: nightly toolchain used by `cargo-fuzz`; defaults to `nightly-2026-06-05`.
 - `RS_CI_FUZZ_MODE`: cargo-fuzz check mode: `smoke` (default), `build-only`, or `disabled`.
 - `RS_CI_FUZZ_SECONDS_PER_TARGET`: positive smoke duration in seconds for each fuzz target; defaults to `10`.
 - `RS_CI_FUZZ_MAX_LEN`: positive maximum libFuzzer input length in bytes; defaults to `4096`.
-- `RUST_TOOLCHAIN`: deprecated fallback for `RS_CI_FMT_TOOLCHAIN` and `RS_CI_CLIPPY_TOOLCHAIN` when those variables are unset.
 - `RS_CI_UPDATE_TOOLCHAINS`: set to `1` to run `rustup toolchain update`; by default, scripts install missing toolchains but do not update installed ones.
+
+All nightly overrides must use the `nightly-YYYY-MM-DD` form. Floating
+`nightly` values are rejected before any Cargo command runs. The shared defaults
+are defined in `toolchains.sh`.
+
 - `RS_CI_PROJECT_ROOT`: Rust project root used when these scripts are run from another directory.
 - `RS_CI_RUSTFMT_CONFIG`: rustfmt configuration path; defaults to `rustfmt.toml` beside the running CI script.
 - `RS_CI_CARGO_MATRIX_CONFIG`: project-relative path to the optional Cargo feature matrix config; defaults to `.rs-ci-cargo-matrix.json`.

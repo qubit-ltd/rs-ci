@@ -1,7 +1,7 @@
 # Rustfmt configuration for Qubit Rust projects.
 #
 # This configuration requires nightly Rust for imports formatting.
-# Use `cargo +nightly fmt` or run `./align-ci.sh` to format code.
+# Run `./align-ci.sh` to format code with the pinned nightly toolchain.
 
 # Format imports with vertical layout (each item on its own line within braces)
 # This keeps the `pub use module::{...}` format but puts each item on a separate line

@@ -14,9 +14,12 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=toolchains.sh
+source "$SCRIPT_DIR/toolchains.sh"
+configure_rs_ci_toolchains
+
 PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
 RS_CI_FUZZ_MODE="${RS_CI_FUZZ_MODE:-smoke}"
-RS_CI_FUZZ_TOOLCHAIN="${RS_CI_FUZZ_TOOLCHAIN:-${RS_CI_FMT_TOOLCHAIN:-${RUST_TOOLCHAIN:-nightly-2026-06-05}}}"
 RS_CI_FUZZ_SECONDS_PER_TARGET="${RS_CI_FUZZ_SECONDS_PER_TARGET:-10}"
 RS_CI_FUZZ_MAX_LEN="${RS_CI_FUZZ_MAX_LEN:-4096}"
 TEMP_CORPUS=""

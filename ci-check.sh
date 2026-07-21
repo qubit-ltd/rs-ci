@@ -14,17 +14,12 @@
 
 set -euo pipefail
 
-RS_CI_DEFAULT_LINT_TOOLCHAIN="${RUST_TOOLCHAIN:-nightly-2026-06-05}"
-RS_CI_BUILD_TOOLCHAIN="${RS_CI_BUILD_TOOLCHAIN:-1.94.0}"
-RS_CI_FMT_TOOLCHAIN="${RS_CI_FMT_TOOLCHAIN:-$RS_CI_DEFAULT_LINT_TOOLCHAIN}"
-RS_CI_CLIPPY_TOOLCHAIN="${RS_CI_CLIPPY_TOOLCHAIN:-$RS_CI_DEFAULT_LINT_TOOLCHAIN}"
-RS_CI_FUZZ_TOOLCHAIN="${RS_CI_FUZZ_TOOLCHAIN:-$RS_CI_DEFAULT_LINT_TOOLCHAIN}"
-RUN_COVERAGE_CFG_CLIPPY="${RUN_COVERAGE_CFG_CLIPPY:-0}"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=toolchains.sh
+source "$SCRIPT_DIR/toolchains.sh"
+configure_rs_ci_toolchains
 
-export RS_CI_BUILD_TOOLCHAIN
-export RS_CI_FMT_TOOLCHAIN
-export RS_CI_CLIPPY_TOOLCHAIN
-export RS_CI_FUZZ_TOOLCHAIN
+RUN_COVERAGE_CFG_CLIPPY="${RUN_COVERAGE_CFG_CLIPPY:-0}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -167,7 +162,6 @@ run_security_audit() {
     exit 1
 }
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 RUSTFMT_CONFIG="${RS_CI_RUSTFMT_CONFIG:-$SCRIPT_DIR/rustfmt.toml}"
 PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
 
@@ -197,6 +191,7 @@ echo ""
 
 print_step "1/12 Checking code format (cargo +$RS_CI_FMT_TOOLCHAIN fmt -- --check --config-path $RUSTFMT_CONFIG)"
 ensure_lint_toolchains
+print_rs_ci_lint_versions
 if cargo +"$RS_CI_FMT_TOOLCHAIN" fmt -- --check --config-path "$RUSTFMT_CONFIG" > /dev/null 2>&1; then
     print_success "Code format check passed"
 else

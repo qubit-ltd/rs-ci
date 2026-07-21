@@ -50,7 +50,7 @@ class CiCheckScriptTests(unittest.TestCase):
                 f"SCRIPT_DIR={shlex.quote(str(script_dir))}\n"
                 f"PROJECT_ROOT={shlex.quote(str(script_dir))}\n"
                 "RS_CI_FUZZ_MODE=smoke\n"
-                "RS_CI_FUZZ_TOOLCHAIN=nightly-test\n"
+                "RS_CI_FUZZ_TOOLCHAIN=nightly-2099-01-01\n"
                 "ensure_toolchain() { printf '%s\\n' \"$1\"; }\n"
                 f"{condition_block}\n"
             )
@@ -62,16 +62,17 @@ class CiCheckScriptTests(unittest.TestCase):
             )
 
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertEqual("nightly-test\n", result.stdout)
+        self.assertEqual("nightly-2099-01-01\n", result.stdout)
         self.assertEqual("", result.stderr)
 
     def test_ci_check_runs_conditional_cargo_fuzz_after_tests(self) -> None:
         script = CI_CHECK_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn(
-            'RS_CI_FUZZ_TOOLCHAIN="${RS_CI_FUZZ_TOOLCHAIN:-$RS_CI_DEFAULT_LINT_TOOLCHAIN}"',
+            'source "$SCRIPT_DIR/toolchains.sh"',
             script,
         )
+        self.assertIn("configure_rs_ci_toolchains", script)
         self.assertIn(
             'print_step "6/12 Running conditional cargo-fuzz smoke checks"',
             script,
