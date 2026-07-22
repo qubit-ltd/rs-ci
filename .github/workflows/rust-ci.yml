@@ -786,10 +786,10 @@ jobs:
             ~\.cargo\registry
             ~\.cargo\git
             target
-          key: ${{ runner.os }}-cargo-stable-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-lint-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-stable-${{ hashFiles('Cargo.toml') }}-
-            ${{ runner.os }}-cargo-stable-
+            ${{ runner.os }}-cargo-lint-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
+            ${{ runner.os }}-cargo-lint-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-
 
       - name: Install Rust
         shell: pwsh
@@ -804,7 +804,9 @@ jobs:
           }
           rustup toolchain install $env:RS_CI_BUILD_TOOLCHAIN --profile minimal
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          rustup component add clippy --toolchain $env:RS_CI_BUILD_TOOLCHAIN
+          rustup toolchain install $env:RS_CI_CLIPPY_TOOLCHAIN --profile minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustup component add clippy --toolchain $env:RS_CI_CLIPPY_TOOLCHAIN
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           rustup run $env:RS_CI_BUILD_TOOLCHAIN rustc --version
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -816,7 +818,7 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
-          cargo "+$env:RS_CI_BUILD_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
+          cargo "+$env:RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build and test on Windows
@@ -849,18 +851,19 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target
-          key: ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-lint-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
-            ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-
+            ${{ runner.os }}-cargo-lint-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
+            ${{ runner.os }}-cargo-lint-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-
 
       - name: Install Rust
         run: |
           rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
-          rustup component add clippy --toolchain "$RS_CI_BUILD_TOOLCHAIN"
+          rustup toolchain install "$RS_CI_CLIPPY_TOOLCHAIN" --profile minimal
+          rustup component add clippy --toolchain "$RS_CI_CLIPPY_TOOLCHAIN"
 
       - name: Run clippy on macOS
-        run: cargo +"$RS_CI_BUILD_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
+        run: cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
 
       - name: Build and test on macOS
         run: cargo +"$RS_CI_BUILD_TOOLCHAIN" test --all-features --verbose
