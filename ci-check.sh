@@ -201,6 +201,19 @@ else
     echo "  ./align-ci.sh"
     exit 1
 fi
+if [ -f "$PROJECT_ROOT/fuzz/Cargo.toml" ]; then
+    if cargo +"$RS_CI_FMT_TOOLCHAIN" fmt \
+        --manifest-path "$PROJECT_ROOT/fuzz/Cargo.toml" \
+        -- --check --config-path "$RUSTFMT_CONFIG" > /dev/null 2>&1; then
+        print_success "Fuzz crate format check passed"
+    else
+        print_error "Fuzz crate format check failed"
+        echo ""
+        echo "Please run:"
+        echo "  ./align-ci.sh"
+        exit 1
+    fi
+fi
 echo ""
 
 print_step "2/13 Running Clippy checks (cargo +$RS_CI_CLIPPY_TOOLCHAIN clippy)"

@@ -8,9 +8,150 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CI_CHECK_SCRIPT = REPO_ROOT / "ci-check.sh"
+ALIGN_CI_SCRIPT = REPO_ROOT / "align-ci.sh"
 
 
 class CiCheckScriptTests(unittest.TestCase):
+    def run_format_block(
+        self,
+        script_path: Path,
+        start_marker: str,
+        end_marker: str,
+        *,
+        has_fuzz_manifest: bool,
+        fail_fuzz_format: bool = False,
+    ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+        script = script_path.read_text(encoding="utf-8")
+        block_start = script.index(start_marker)
+        block_end = script.index(end_marker, block_start)
+        format_block = script[block_start:block_end]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir)
+            rustfmt_config = project_root / "rustfmt.toml"
+            rustfmt_config.write_text("edition = \"2024\"\n", encoding="utf-8")
+            if has_fuzz_manifest:
+                fuzz_dir = project_root / "fuzz"
+                fuzz_dir.mkdir()
+                (fuzz_dir / "Cargo.toml").write_text(
+                    "[package]\nname = \"fuzz-targets\"\nversion = \"0.0.0\"\n",
+                    encoding="utf-8",
+                )
+            cargo_log = project_root / "cargo.log"
+            harness = (
+                "set -e\n"
+                f"PROJECT_ROOT={shlex.quote(str(project_root))}\n"
+                f"RUSTFMT_CONFIG={shlex.quote(str(rustfmt_config))}\n"
+                f"CARGO_LOG={shlex.quote(str(cargo_log))}\n"
+                "RS_CI_FMT_TOOLCHAIN=nightly-2099-01-01\n"
+                "RS_CI_FUZZ_MODE=disabled\n"
+                f"FAIL_FUZZ_FORMAT={'1' if fail_fuzz_format else '0'}\n"
+                "print_success() { :; }\n"
+                "print_error() { :; }\n"
+                "cargo() {\n"
+                "  local separator=''\n"
+                "  local argument\n"
+                "  for argument in \"$@\"; do\n"
+                "    printf '%s%s' \"$separator\" \"$argument\" >> \"$CARGO_LOG\"\n"
+                "    separator='|'\n"
+                "  done\n"
+                "  printf '\\n' >> \"$CARGO_LOG\"\n"
+                "  if [ \"$FAIL_FUZZ_FORMAT\" = '1' ]; then\n"
+                "    case \"$*\" in\n"
+                "      *fuzz/Cargo.toml*) return 7 ;;\n"
+                "    esac\n"
+                "  fi\n"
+                "}\n"
+                f"{format_block}\n"
+            )
+            result = subprocess.run(
+                ["bash", "-c", harness],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            commands = (
+                cargo_log.read_text(encoding="utf-8").splitlines()
+                if cargo_log.exists()
+                else []
+            )
+        return result, commands
+
+    def run_ci_format_block(
+        self,
+        *,
+        has_fuzz_manifest: bool,
+        fail_fuzz_format: bool = False,
+    ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+        return self.run_format_block(
+            CI_CHECK_SCRIPT,
+            'if cargo +"$RS_CI_FMT_TOOLCHAIN" fmt -- --check',
+            '\necho ""\n\nprint_step "2/13',
+            has_fuzz_manifest=has_fuzz_manifest,
+            fail_fuzz_format=fail_fuzz_format,
+        )
+
+    def run_align_format_block(
+        self,
+        *,
+        has_fuzz_manifest: bool,
+        fail_fuzz_format: bool = False,
+    ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+        return self.run_format_block(
+            ALIGN_CI_SCRIPT,
+            'echo "==> cargo +$RS_CI_FMT_TOOLCHAIN fmt -- --config-path',
+            '\necho "==> cargo +$RS_CI_CLIPPY_TOOLCHAIN clippy --fix',
+            has_fuzz_manifest=has_fuzz_manifest,
+            fail_fuzz_format=fail_fuzz_format,
+        )
+
+    def test_format_scripts_skip_fuzz_without_manifest(self) -> None:
+        ci_result, ci_commands = self.run_ci_format_block(
+            has_fuzz_manifest=False,
+        )
+        align_result, align_commands = self.run_align_format_block(
+            has_fuzz_manifest=False,
+        )
+
+        self.assertEqual(0, ci_result.returncode, ci_result.stderr)
+        self.assertEqual(0, align_result.returncode, align_result.stderr)
+        self.assertEqual(1, len(ci_commands), ci_commands)
+        self.assertEqual(1, len(align_commands), align_commands)
+
+    def test_format_scripts_include_fuzz_manifest_when_fuzz_disabled(
+        self,
+    ) -> None:
+        ci_result, ci_commands = self.run_ci_format_block(
+            has_fuzz_manifest=True,
+        )
+        align_result, align_commands = self.run_align_format_block(
+            has_fuzz_manifest=True,
+        )
+
+        self.assertEqual(0, ci_result.returncode, ci_result.stderr)
+        self.assertEqual(0, align_result.returncode, align_result.stderr)
+        self.assertEqual(2, len(ci_commands), ci_commands)
+        self.assertEqual(2, len(align_commands), align_commands)
+        self.assertIn("--manifest-path", ci_commands[1])
+        self.assertIn("fuzz/Cargo.toml", ci_commands[1])
+        self.assertIn("|--check|", ci_commands[1])
+        self.assertIn("--manifest-path", align_commands[1])
+        self.assertIn("fuzz/Cargo.toml", align_commands[1])
+        self.assertNotIn("|--check|", align_commands[1])
+
+    def test_format_scripts_propagate_fuzz_format_failure(self) -> None:
+        ci_result, _ = self.run_ci_format_block(
+            has_fuzz_manifest=True,
+            fail_fuzz_format=True,
+        )
+        align_result, _ = self.run_align_format_block(
+            has_fuzz_manifest=True,
+            fail_fuzz_format=True,
+        )
+
+        self.assertNotEqual(0, ci_result.returncode)
+        self.assertNotEqual(0, align_result.returncode)
+
     def test_ci_check_delegates_style_policy_without_rule_overrides(
         self,
     ) -> None:

@@ -122,6 +122,12 @@ automatically enable cargo-fuzz only when `fuzz/Cargo.toml` declares
 marker print a skip message and do not need a nightly toolchain or the
 `cargo-fuzz` executable.
 
+Rustfmt coverage is independent of cargo-fuzz execution. Whenever
+`fuzz/Cargo.toml` exists, `ci-check.sh`, `align-ci.sh`, the reusable GitHub
+Actions workflow, and the CircleCI template also check or format that crate,
+including when `RS_CI_FUZZ_MODE=disabled` or the cargo-fuzz metadata marker is
+absent.
+
 The default `RS_CI_FUZZ_MODE=smoke` builds each target reported by
 `cargo fuzz list` and runs it for `RS_CI_FUZZ_SECONDS_PER_TARGET=10` seconds
 with a maximum input length of `RS_CI_FUZZ_MAX_LEN=4096` bytes.

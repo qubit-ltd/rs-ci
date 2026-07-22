@@ -100,6 +100,11 @@ jobs:
               RUSTFMT_CONFIG=rustfmt.toml
             fi
             cargo +"$RS_CI_FMT_TOOLCHAIN" fmt -- --check --config-path "$RUSTFMT_CONFIG"
+            if [ -f fuzz/Cargo.toml ]; then
+              cargo +"$RS_CI_FMT_TOOLCHAIN" fmt \
+                --manifest-path fuzz/Cargo.toml \
+                -- --check --config-path "$RUSTFMT_CONFIG"
+            fi
       - run:
           name: Run clippy
           command: cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings

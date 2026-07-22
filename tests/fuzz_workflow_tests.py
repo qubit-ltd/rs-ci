@@ -11,6 +11,38 @@ README_ZH_CN = REPO_ROOT / "README.zh_CN.md"
 
 
 class FuzzWorkflowTests(unittest.TestCase):
+    def test_hosted_workflows_check_independent_fuzz_crate_format(
+        self,
+    ) -> None:
+        github_workflow = GITHUB_WORKFLOW.read_text(encoding="utf-8")
+        github_start = github_workflow.index("- name: Check code format")
+        github_end = github_workflow.index(
+            "- name: Run clippy",
+            github_start,
+        )
+        github_format_block = github_workflow[github_start:github_end]
+
+        circleci_config = CIRCLECI_CONFIG.read_text(encoding="utf-8")
+        circleci_start = circleci_config.index("name: Check code format")
+        circleci_end = circleci_config.index(
+            "name: Run clippy",
+            circleci_start,
+        )
+        circleci_format_block = circleci_config[circleci_start:circleci_end]
+
+        for format_block in (github_format_block, circleci_format_block):
+            self.assertIn("if [ -f fuzz/Cargo.toml ]; then", format_block)
+            self.assertIn("--manifest-path fuzz/Cargo.toml", format_block)
+            self.assertEqual(
+                2,
+                format_block.count('cargo +"$RS_CI_FMT_TOOLCHAIN" fmt'),
+            )
+            self.assertGreaterEqual(format_block.count("--check"), 2)
+            self.assertGreaterEqual(
+                format_block.count('--config-path "$RUSTFMT_CONFIG"'),
+                2,
+            )
+
     def test_github_workflow_has_conditional_fuzz_smoke_job(self) -> None:
         workflow = GITHUB_WORKFLOW.read_text(encoding="utf-8")
 

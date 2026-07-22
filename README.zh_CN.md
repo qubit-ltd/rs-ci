@@ -115,6 +115,11 @@ artifact。
 cargo-fuzz。没有这个标准标记的项目会输出跳过信息，也不需要 nightly 工具链或
 `cargo-fuzz` 可执行程序。
 
+Rustfmt 覆盖与 cargo-fuzz 是否执行相互独立。只要存在 `fuzz/Cargo.toml`，
+`ci-check.sh`、`align-ci.sh`、可复用 GitHub Actions workflow 和 CircleCI 模板
+就会额外检查或格式化该 crate；即使 `RS_CI_FUZZ_MODE=disabled` 或未声明
+cargo-fuzz 元数据标记也不会跳过格式检查。
+
 默认的 `RS_CI_FUZZ_MODE=smoke` 会构建 `cargo fuzz list` 报告的每个 target，并让
 每个 target 运行 `RS_CI_FUZZ_SECONDS_PER_TARGET=10` 秒，同时把最大输入长度限制为
 `RS_CI_FUZZ_MAX_LEN=4096` 字节。smoke 运行使用临时可写
