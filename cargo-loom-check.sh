@@ -8,7 +8,7 @@
 #
 ################################################################################
 #
-# Conditionally runs Loom model tests for projects declaring a Loom dev dependency.
+# Conditionally runs discovered Loom model tests for projects declaring Loom.
 #
 
 set -euo pipefail
@@ -25,12 +25,12 @@ die() {
     exit 1
 }
 
-has_loom_dev_dependency() {
+has_loom_dependency() {
     local manifest="$PROJECT_ROOT/Cargo.toml"
 
     [ -f "$manifest" ] || return 1
     awk '
-        /^\[dev-dependencies\]$/ { dependencies = 1; next }
+        /^\[(dev-)?dependencies\]$/ { dependencies = 1; next }
         /^\[/ { dependencies = 0 }
         dependencies && /^[[:space:]]*loom[[:space:]]*=/ { found = 1 }
         END { exit(found ? 0 : 1) }
@@ -38,7 +38,7 @@ has_loom_dev_dependency() {
 }
 
 if [ "${1:-}" = "--is-configured" ]; then
-    has_loom_dev_dependency
+    has_loom_dependency
     exit $?
 fi
 
@@ -46,12 +46,26 @@ if [ "$#" -ne 0 ]; then
     die "usage: cargo-loom-check.sh [--is-configured]"
 fi
 
-if ! has_loom_dev_dependency; then
+if ! has_loom_dependency; then
     echo "loom is not configured; skipping."
     exit 0
 fi
 
 cd "$PROJECT_ROOT"
-echo "==> RUSTFLAGS=--cfg loom cargo +$RS_CI_BUILD_TOOLCHAIN test --release --all-features --verbose"
-RUSTFLAGS="--cfg loom" cargo +"$RS_CI_BUILD_TOOLCHAIN" test --release --all-features --verbose
+echo "==> discovering Loom model tests"
+model_list=$(
+    RUSTFLAGS="--cfg loom" cargo +"$RS_CI_BUILD_TOOLCHAIN" \
+        test --release --all-features loom -- --list
+)
+model_count=$(printf '%s\n' "$model_list" | awk '
+    /: test$/ { count += 1 }
+    END { print count + 0 }
+')
+if [ "$model_count" -eq 0 ]; then
+    die "no Loom model tests were discovered; model test names must contain 'loom'"
+fi
+printf '%s\n' "$model_list"
+echo "==> running $model_count Loom model test(s)"
+RUSTFLAGS="--cfg loom" cargo +"$RS_CI_BUILD_TOOLCHAIN" \
+    test --release --all-features --verbose loom
 echo "Loom model checks passed."

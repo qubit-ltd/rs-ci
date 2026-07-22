@@ -20,12 +20,20 @@ def write_manifest(project_root: Path, development_dependencies: str = "") -> No
     )
 
 
-def write_fake_cargo(bin_dir: Path, command_log: Path, rustflags_log: Path) -> None:
+def write_fake_cargo(
+    bin_dir: Path,
+    command_log: Path,
+    rustflags_log: Path,
+    model_list_path: Path,
+) -> None:
     cargo = bin_dir / "cargo"
     cargo.write_text(
         "#!/bin/sh\n"
         f"printf '%s\\n' \"$*\" >> \"{command_log}\"\n"
-        f"printf '%s\\n' \"${{RUSTFLAGS-}}\" >> \"{rustflags_log}\"\n",
+        f"printf '%s\\n' \"${{RUSTFLAGS-}}\" >> \"{rustflags_log}\"\n"
+        "case \" $* \" in\n"
+        f"    *' --list '*) cat \"{model_list_path}\" ;;\n"
+        "esac\n",
         encoding="utf-8",
     )
     cargo.chmod(0o755)
@@ -41,10 +49,13 @@ class CargoLoomCheckTests(unittest.TestCase):
         self.bin_dir.mkdir()
         self.command_log_path = self.root / "cargo.log"
         self.rustflags_log_path = self.root / "rustflags.log"
+        self.model_list_path = self.root / "model-list.log"
+        self.model_list_path.write_text("", encoding="utf-8")
         write_fake_cargo(
             self.bin_dir,
             self.command_log_path,
             self.rustflags_log_path,
+            self.model_list_path,
         )
 
     def tearDown(self) -> None:
@@ -99,7 +110,18 @@ class CargoLoomCheckTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertFalse(self.command_log_path.exists())
 
-    def test_runs_release_all_feature_tests_with_loom_cfg(self) -> None:
+    def test_detection_returns_zero_for_optional_loom_dependency(self) -> None:
+        write_manifest(
+            self.project_root,
+            '[dependencies]\nloom = { version = "0.7", optional = true }\n',
+        )
+
+        result = self.run_checker("--is-configured")
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertFalse(self.command_log_path.exists())
+
+    def test_fails_when_no_loom_models_are_discovered(self) -> None:
         write_manifest(
             self.project_root,
             '[dev-dependencies]\nloom = { version = "0.7" }\n',
@@ -107,12 +129,34 @@ class CargoLoomCheckTests(unittest.TestCase):
 
         result = self.run_checker()
 
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("no Loom model tests were discovered", result.stderr)
+
+    def test_runs_release_all_feature_tests_with_loom_cfg(self) -> None:
+        write_manifest(
+            self.project_root,
+            '[dev-dependencies]\nloom = { version = "0.7" }\n',
+        )
+        self.model_list_path.write_text(
+            "atomic::test_loom_release_acquire_visibility: test\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_checker()
+
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertIn(
-            "+1.94.0 test --release --all-features --verbose",
+            "+1.94.0 test --release --all-features loom -- --list",
             self.command_log(),
         )
-        self.assertIn("--cfg loom", self.rustflags_log())
+        self.assertIn(
+            "+1.94.0 test --release --all-features --verbose loom",
+            self.command_log(),
+        )
+        self.assertEqual(
+            ["--cfg loom", "--cfg loom"],
+            self.rustflags_log().splitlines(),
+        )
 
 
 if __name__ == "__main__":
