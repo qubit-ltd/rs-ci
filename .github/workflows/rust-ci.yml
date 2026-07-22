@@ -695,7 +695,7 @@ jobs:
           rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
 
       - name: Generate documentation
-        run: RUSTDOCFLAGS="-D warnings" cargo +"$RS_CI_BUILD_TOOLCHAIN" doc --no-deps --verbose
+        run: RUSTDOCFLAGS="-D warnings -D missing-docs" cargo +"$RS_CI_BUILD_TOOLCHAIN" doc --all-features --no-deps --verbose
 
       - name: Upload documentation artifact
         uses: actions/upload-artifact@v7
@@ -824,7 +824,7 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
-          cargo "+$env:RS_CI_BUILD_TOOLCHAIN" test --verbose
+          cargo "+$env:RS_CI_BUILD_TOOLCHAIN" test --all-features --verbose
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   macos_test:
