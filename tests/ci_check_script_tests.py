@@ -86,7 +86,7 @@ class CiCheckScriptTests(unittest.TestCase):
         return self.run_format_block(
             CI_CHECK_SCRIPT,
             'if cargo +"$RS_CI_FMT_TOOLCHAIN" fmt -- --check',
-            '\necho ""\n\nprint_step "2/13',
+            '\necho ""\n\nprint_step "2/15',
             has_fuzz_manifest=has_fuzz_manifest,
             fail_fuzz_format=fail_fuzz_format,
         )
@@ -157,7 +157,7 @@ class CiCheckScriptTests(unittest.TestCase):
     ) -> None:
         script = CI_CHECK_SCRIPT.read_text(encoding="utf-8")
         block_start = script.index(
-            'print_step "3/13 Running Rust style checks"'
+            'print_step "3/15 Running Rust style checks"'
         )
         block_end = script.index(
             'print_success "Rust style checks passed"',
@@ -215,34 +215,80 @@ class CiCheckScriptTests(unittest.TestCase):
         )
         self.assertIn("configure_rs_ci_toolchains", script)
         self.assertIn(
-            'print_step "6/13 Running conditional cargo-fuzz smoke checks"',
+            'print_step "8/15 Running conditional cargo-fuzz smoke checks"',
             script,
         )
         self.assertIn('ensure_toolchain "$RS_CI_FUZZ_TOOLCHAIN"', script)
         self.assertIn('"${RS_CI_FUZZ_MODE:-smoke}" != "disabled"', script)
         self.assertIn('"$SCRIPT_DIR/cargo-fuzz-check.sh"', script)
         self.assertIn(
-            'print_step "8/13 Building all-feature documentation',
+            'print_step "10/15 Building all-feature documentation',
             script,
         )
         self.assertNotIn('2b/12 Running Clippy checks', script)
-        self.assertIn('2b/13 Running Clippy checks', script)
+        self.assertIn('2b/15 Running Clippy checks', script)
 
     def test_ci_check_runs_conditional_loom_after_fuzz(self) -> None:
         script = CI_CHECK_SCRIPT.read_text(encoding="utf-8")
 
         fuzz_step = script.index(
-            'print_step "6/13 Running conditional cargo-fuzz smoke checks"'
+            'print_step "8/15 Running conditional cargo-fuzz smoke checks"'
         )
         self.assertIn(
-            'print_step "7/13 Running conditional Loom model checks"',
+            'print_step "9/15 Running conditional Loom model checks"',
             script,
         )
         loom_step = script.index(
-            'print_step "7/13 Running conditional Loom model checks"'
+            'print_step "9/15 Running conditional Loom model checks"'
         )
         self.assertGreater(loom_step, fuzz_step)
         self.assertIn('"$SCRIPT_DIR/cargo-loom-check.sh"', script)
+
+    def test_ci_check_runs_metadata_gated_miri_and_sanitizer_checks(
+        self,
+    ) -> None:
+        script = CI_CHECK_SCRIPT.read_text(encoding="utf-8")
+
+        test_step = script.index(
+            'print_step "5/15 Running tests '
+        )
+        miri_step = script.index(
+            'print_step "6/15 Running conditional Miri checks"'
+        )
+        sanitizer_step = script.index(
+            'print_step "7/15 Running conditional sanitizer checks"'
+        )
+        fuzz_step = script.index(
+            'print_step "8/15 Running conditional cargo-fuzz smoke checks"'
+        )
+
+        self.assertLess(test_step, miri_step)
+        self.assertLess(miri_step, sanitizer_step)
+        self.assertLess(sanitizer_step, fuzz_step)
+        self.assertIn(
+            'ensure_toolchain "$RS_CI_MIRI_TOOLCHAIN" miri',
+            script,
+        )
+        self.assertIn(
+            'cargo +"$RS_CI_MIRI_TOOLCHAIN" miri setup',
+            script,
+        )
+        self.assertIn(
+            'ensure_toolchain "$RS_CI_SANITIZER_TOOLCHAIN" rust-src',
+            script,
+        )
+        self.assertIn('"$SCRIPT_DIR/cargo-miri-check.sh"', script)
+        self.assertIn('"$SCRIPT_DIR/cargo-sanitizer-check.sh"', script)
+        self.assertIn("MIRI_CONFIG_STATUS", script)
+        self.assertIn("SANITIZER_CONFIG_STATUS", script)
+        self.assertIn(
+            'if [ "$MIRI_CONFIG_STATUS" -eq 1 ]; then',
+            script,
+        )
+        self.assertIn(
+            'if [ "$SANITIZER_CONFIG_STATUS" -eq 1 ]; then',
+            script,
+        )
 
     def test_documentation_build_checks_all_features_and_missing_docs(self) -> None:
         script = CI_CHECK_SCRIPT.read_text(encoding="utf-8")
