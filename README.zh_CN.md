@@ -13,6 +13,9 @@
 - `cargo-feature-check.sh`：可选的项目声明式 Cargo feature matrix 运行器。
 - `cargo-fuzz-check.sh`：按条件运行的 cargo-fuzz 构建与限时 smoke 测试脚本。
 - `cargo-loom-check.sh`：按条件运行的 Loom 模型测试脚本。
+- `rs-ci-metadata.sh`：读取 package 级 CI opt-in 的共享 Cargo metadata 脚本。
+- `cargo-miri-check.sh`：按条件运行的 Miri 测试脚本。
+- `cargo-sanitizer-check.sh`：按条件运行的 sanitizer 测试脚本。
 - `cargo-package-check.sh`：运行 `cargo package --allow-dirty` 的本地打包验证脚本。
 - `readme-version-check.py`：README 依赖片段检查脚本，要求当前 crate 使用 `major.minor` 版本。
 - `style-check.sh`：检查 rustfmt 和 clippy 不覆盖的 Rust 源码布局约束。
@@ -27,7 +30,7 @@
 把这些文件复制到 Rust 项目根目录：
 
 ```bash
-command cp align-ci.sh ci-check.sh cargo-env.sh toolchains.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
+command cp align-ci.sh ci-check.sh cargo-env.sh toolchains.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh rs-ci-metadata.sh cargo-miri-check.sh cargo-sanitizer-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
 command cp .circleci/config.yml <project-root>/.circleci/config.yml
 ```
 
@@ -35,7 +38,7 @@ command cp .circleci/config.yml <project-root>/.circleci/config.yml
 
 ```bash
 cd <project-root>
-chmod +x align-ci.sh ci-check.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh
+chmod +x align-ci.sh ci-check.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh rs-ci-metadata.sh cargo-miri-check.sh cargo-sanitizer-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh
 ./style-check.sh
 ./ci-check.sh
 ```
@@ -90,10 +93,11 @@ jobs:
 
 可复用 workflow 保留现有格式化、clippy、debug build、doc test、README 依赖版本、
 test、release build、文档、打包验证、审计，以及可选的 Windows 和 macOS 检查。覆盖率通过 `coverage.sh all` 生成，工具是
-`cargo-llvm-cov`，由 `taiki-e/install-action` 安装。CI 中设置
-`COVERAGE_ENFORCE_THRESHOLDS=0`，初始接入阶段只报告覆盖率，不因阈值失败。
-覆盖率发布只使用 GitHub Actions summary、comment 和 artifact，不需要 Codecov 或
-Coveralls token。
+`cargo-llvm-cov`，由 `taiki-e/install-action` 安装。可复用 workflow 的
+`coverage_enforce_thresholds` 默认值为 `"0"`，初始接入阶段只报告覆盖率，不因
+阈值失败；调用方可设为 `"1"`，启用与本地 `coverage.sh` 相同的单源码阈值。
+覆盖率发布只使用 GitHub Actions summary、comment 和 artifact，不需要 Codecov
+或 Coveralls token。
 
 调用方 workflow 使用 `push`、`pull_request` 或 `workflow_dispatch` 触发时，
 coverage job 会写出 `lcov.info`、`target/llvm-cov/html` 下的 HTML 报告、
@@ -107,6 +111,46 @@ artifact，comment 步骤不会阻塞 CI。
 workflow 不会自动提交生成的覆盖率文件。默认分支 `push` 会构建 Pages 站点，并通过
 GitHub Pages Actions 部署。pull request 和非默认分支只上传 `pages-preview`
 artifact。
+
+## Workspace 覆盖率
+
+`coverage.sh` 通过 `cargo metadata` 解析项目，因此一个 workspace 可以在一次
+运行中收集并检查多个成员 package。默认范围是 Cargo 的
+`workspace_default_members`；需要其他选择时，在项目根目录添加
+`.rs-ci-coverage.json`：
+
+```json
+{
+  "scope": "workspace",
+  "exclude_packages": ["integration-fixtures"],
+  "source_dirs": {
+    "qubit-redact": ["src"],
+    "qubit-redact-derive": ["src"]
+  }
+}
+```
+
+`scope` 可选 `default-members`、`workspace` 或 `package`。`package` 选择项目根
+`Cargo.toml` 对应的 package，因此不能用于虚拟 workspace 根。
+`exclude_packages` 使用准确的 workspace package 名称。`source_dirs` 可为已选择
+的 package 配置一个或多个相对源码目录；未配置的 package 使用
+`COVERAGE_SOURCE_DIR`，默认是 `src`。未知配置键、未知 package、重复项、绝对
+路径或包含 `..` 的路径都会在收集覆盖率前明确失败。
+
+收集阶段使用 Cargo workspace 选择参数（`--workspace` 加排除项），让所选 package
+共享一次测试运行。只生成报告时改用重复的 `--package` 参数，因为
+`cargo llvm-cov report` 不接受 `--workspace`。两条路径来自同一份 metadata
+package 计划；阈值检查会按最长匹配规则把每个报告文件归入配置的源码根目录。
+
+调用方 workflow 可以这样启用严格覆盖率：
+
+```yaml
+jobs:
+  rust-ci:
+    uses: qubit-ltd/rs-ci/.github/workflows/rust-ci.yml@main
+    with:
+      coverage_enforce_thresholds: "1"
+```
 
 ## 条件化 cargo-fuzz 检查
 
@@ -150,6 +194,41 @@ RUSTFLAGS="--cfg loom" cargo test --release --all-features
 
 `loom` 配置标志会启用 `#[cfg(loom)]` 守卫的测试；release profile 可降低模型探索
 成本。hosted Loom 检查只在 Linux 上运行。
+
+## 条件化 Miri 与 Sanitizer 检查
+
+package 通过 Cargo metadata 显式启用检查。没有这些字段的项目会跳过两项检查，
+且不会安装额外的 nightly 工具链：
+
+```toml
+[package.metadata.rs-ci]
+miri = true
+sanitizers = ["address"]
+```
+
+配置以 package 为粒度。在 workspace 中，只有声明 `miri = true` 的 package 才会
+由 Miri 执行；只有把 `"address"` 加入列表的 package 才会运行
+AddressSanitizer。字段类型错误、重复项和不支持的 sanitizer 名称都会被视为配置
+错误，而不是静默跳过。
+
+`ci-check.sh` 和可复用 GitHub workflow 会调用同一组 checker 脚本。GitHub
+workflow 提供 `miri_toolchain` 和 `sanitizer_toolchain` 输入，并把两项检查放入
+独立的 conditional job，避免一项结果遮蔽另一项。本次不向 CircleCI 模板加入这
+两项检查。
+在 rs-ci 滚动升级期间，尚未包含新 checker 脚本的调用方仍会跳过未声明的检查；
+如果调用方已经 opt-in、却未更新 `.rs-ci` 子模块，workflow 会明确要求更新，
+不会静默漏掉已请求的检查。
+
+Miri 会对每个 opt-in package 运行 all-feature 测试。切换本地工具链后，如果
+Miri sysroot 或构建缓存出现不一致，可以运行：
+
+```bash
+cargo +"$RS_CI_MIRI_TOOLCHAIN" miri clean
+```
+
+AddressSanitizer 当前只支持 `x86_64-unknown-linux-gnu` CI 路径，使用固定日期的
+nightly、`rust-src`、`-Zsanitizer=address` 和 `-Zbuild-std`。已经 opt-in 的
+项目在其他本地主机上会明确失败，不会把未执行的检查报告为成功。
 
 ## Cargo Feature Matrix
 
@@ -205,6 +284,8 @@ Cargo 默认 feature 选择，不额外检查其他 feature 组合。
 - `RS_CI_FMT_TOOLCHAIN`：`rustfmt` 使用的工具链；默认是 `nightly-2026-06-05`。
 - `RS_CI_CLIPPY_TOOLCHAIN`：`clippy` 使用的工具链；默认是 `nightly-2026-06-05`。
 - `RS_CI_FUZZ_TOOLCHAIN`：`cargo-fuzz` 使用的 nightly 工具链；默认是 `nightly-2026-06-05`。
+- `RS_CI_MIRI_TOOLCHAIN`：Miri 使用的 nightly 工具链；默认是 `nightly-2026-06-05`。
+- `RS_CI_SANITIZER_TOOLCHAIN`：sanitizer 使用的 nightly 工具链；默认是 `nightly-2026-06-05`。
 - `RS_CI_FUZZ_MODE`：cargo-fuzz 检查模式，可选 `smoke`（默认）、`build-only` 或 `disabled`。
 - `RS_CI_FUZZ_SECONDS_PER_TARGET`：每个 fuzz target 的正整数 smoke 时长（秒）；默认是 `10`。
 - `RS_CI_FUZZ_MAX_LEN`：libFuzzer 输入的正整数最大字节数；默认是 `4096`。
@@ -233,6 +314,8 @@ Cargo 命令之前拒绝浮动的 `nightly`，共享默认值统一定义在 `to
 - `STYLE_EXTRA_EXCLUDE_REGEX`：追加给 `style-check.sh` 的文件排除正则。
 - `STYLE_ALLOWLIST_FILE`：项目级已审核风格例外白名单；默认是 `<project-root>/.qubit-style-allowlist`。
 - `COVERAGE_ENFORCE_THRESHOLDS`：设为 `0` 时禁用单源码文件覆盖率阈值检查；默认是 `1`。
+- `COVERAGE_SCOPE`：覆盖配置文件中的范围，可选 `default-members`、`workspace` 或 `package`。
+- `RS_CI_COVERAGE_CONFIG`：可选 coverage 配置的项目相对或绝对路径；默认是 `.rs-ci-coverage.json`。
 - `COVERAGE_ALL_FEATURES`：设为 `0` 时，coverage 使用 Cargo 默认 feature 选择；默认是 `1`。
 - `COVERAGE_NO_DEFAULT_FEATURES`：与 `COVERAGE_ALL_FEATURES=0` 配合使用，设为 `1` 时 coverage 禁用默认 feature。
 - `COVERAGE_FEATURES`：当 `COVERAGE_ALL_FEATURES=0` 时传给 coverage 的逗号分隔 feature 列表。
