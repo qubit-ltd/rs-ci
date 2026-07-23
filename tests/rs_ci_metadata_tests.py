@@ -18,7 +18,7 @@ def package(
     package_id: str,
     rs_ci: object | None = None,
 ) -> dict[str, object]:
-    metadata = {} if rs_ci is None else {"rs-ci": rs_ci}
+    metadata = None if rs_ci is None else {"rs-ci": rs_ci}
     return {
         "id": package_id,
         "name": name,

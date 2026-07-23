@@ -79,7 +79,9 @@ NORMALIZED_METADATA=$(jq -c '
             )
           | . as $package
           | (
-              if ($package.metadata | type) == "object" then
+              if $package.metadata == null then
+                {}
+              elif ($package.metadata | type) == "object" then
                 ($package.metadata["rs-ci"] // {})
               else
                 error(
