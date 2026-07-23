@@ -15,6 +15,8 @@ RS_CI_DEFAULT_BUILD_TOOLCHAIN="1.94.0"
 RS_CI_DEFAULT_FMT_TOOLCHAIN="nightly-2026-06-05"
 RS_CI_DEFAULT_CLIPPY_TOOLCHAIN="nightly-2026-06-05"
 RS_CI_DEFAULT_FUZZ_TOOLCHAIN="nightly-2026-06-05"
+RS_CI_DEFAULT_MIRI_TOOLCHAIN="nightly-2026-06-05"
+RS_CI_DEFAULT_SANITIZER_TOOLCHAIN="nightly-2026-06-05"
 
 validate_rs_ci_toolchain() {
     local variable_name="$1"
@@ -32,16 +34,22 @@ configure_rs_ci_toolchains() {
     RS_CI_FMT_TOOLCHAIN="${RS_CI_FMT_TOOLCHAIN:-$RS_CI_DEFAULT_FMT_TOOLCHAIN}"
     RS_CI_CLIPPY_TOOLCHAIN="${RS_CI_CLIPPY_TOOLCHAIN:-$RS_CI_DEFAULT_CLIPPY_TOOLCHAIN}"
     RS_CI_FUZZ_TOOLCHAIN="${RS_CI_FUZZ_TOOLCHAIN:-$RS_CI_DEFAULT_FUZZ_TOOLCHAIN}"
+    RS_CI_MIRI_TOOLCHAIN="${RS_CI_MIRI_TOOLCHAIN:-$RS_CI_DEFAULT_MIRI_TOOLCHAIN}"
+    RS_CI_SANITIZER_TOOLCHAIN="${RS_CI_SANITIZER_TOOLCHAIN:-$RS_CI_DEFAULT_SANITIZER_TOOLCHAIN}"
 
     validate_rs_ci_toolchain RS_CI_BUILD_TOOLCHAIN "$RS_CI_BUILD_TOOLCHAIN" || return 1
     validate_rs_ci_toolchain RS_CI_FMT_TOOLCHAIN "$RS_CI_FMT_TOOLCHAIN" || return 1
     validate_rs_ci_toolchain RS_CI_CLIPPY_TOOLCHAIN "$RS_CI_CLIPPY_TOOLCHAIN" || return 1
     validate_rs_ci_toolchain RS_CI_FUZZ_TOOLCHAIN "$RS_CI_FUZZ_TOOLCHAIN" || return 1
+    validate_rs_ci_toolchain RS_CI_MIRI_TOOLCHAIN "$RS_CI_MIRI_TOOLCHAIN" || return 1
+    validate_rs_ci_toolchain RS_CI_SANITIZER_TOOLCHAIN "$RS_CI_SANITIZER_TOOLCHAIN" || return 1
 
     export RS_CI_BUILD_TOOLCHAIN
     export RS_CI_FMT_TOOLCHAIN
     export RS_CI_CLIPPY_TOOLCHAIN
     export RS_CI_FUZZ_TOOLCHAIN
+    export RS_CI_MIRI_TOOLCHAIN
+    export RS_CI_SANITIZER_TOOLCHAIN
 }
 
 print_rs_ci_lint_versions() {
@@ -55,4 +63,6 @@ if [[ "${BASH_SOURCE[0]}" = "$0" ]]; then
     echo "Rustfmt toolchain: $RS_CI_FMT_TOOLCHAIN"
     echo "Clippy toolchain: $RS_CI_CLIPPY_TOOLCHAIN"
     echo "Fuzz toolchain: $RS_CI_FUZZ_TOOLCHAIN"
+    echo "Miri toolchain: $RS_CI_MIRI_TOOLCHAIN"
+    echo "Sanitizer toolchain: $RS_CI_SANITIZER_TOOLCHAIN"
 fi

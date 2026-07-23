@@ -12,6 +12,8 @@ SHELL_SCRIPTS = (
     REPO_ROOT / "ci-check.sh",
     REPO_ROOT / "cargo-feature-check.sh",
     REPO_ROOT / "cargo-fuzz-check.sh",
+    REPO_ROOT / "cargo-miri-check.sh",
+    REPO_ROOT / "cargo-sanitizer-check.sh",
 )
 GITHUB_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "rust-ci.yml"
 CIRCLECI_CONFIG = REPO_ROOT / ".circleci" / "config.yml"
@@ -27,6 +29,8 @@ class ToolchainContractTests(unittest.TestCase):
             "RS_CI_DEFAULT_FMT_TOOLCHAIN",
             "RS_CI_DEFAULT_CLIPPY_TOOLCHAIN",
             "RS_CI_DEFAULT_FUZZ_TOOLCHAIN",
+            "RS_CI_DEFAULT_MIRI_TOOLCHAIN",
+            "RS_CI_DEFAULT_SANITIZER_TOOLCHAIN",
         ):
             self.assertRegex(
                 config,
