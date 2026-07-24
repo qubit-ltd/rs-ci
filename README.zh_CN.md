@@ -183,17 +183,19 @@ cargo install cargo-fuzz
 ## 条件化 Loom 模型检查
 
 `ci-check.sh`、可复用 GitHub Actions workflow 和 CircleCI 模板仅在项目根目录
-`Cargo.toml` 的 `[dev-dependencies]` 中声明 `loom` 时运行 Loom 模型测试。未声明
-该依赖的项目会输出跳过信息，也不会安装额外的 Rust 工具链。
+`Cargo.toml` 的 `[dependencies]` 或 `[dev-dependencies]` 中声明 `loom` 时运行
+Loom 模型测试。未声明该依赖的项目会输出跳过信息，也不会安装额外的 Rust 工具链。
 
 启用后，检查会运行：
 
 ```bash
-RUSTFLAGS="--cfg loom" cargo test --release --all-features
+RUSTFLAGS="--cfg loom" cargo test --release --all-features loom
 ```
 
-`loom` 配置标志会启用 `#[cfg(loom)]` 守卫的测试；release profile 可降低模型探索
-成本。hosted Loom 检查只在 Linux 上运行。
+末尾的 `loom` 过滤条件只选择 Loom 模型测试。`loom` 配置标志会启用
+`#[cfg(loom)]` 守卫的测试；普通测试不能在该配置下运行，因为 Loom 同步原语要求
+处于 `loom::model` 执行上下文中。release profile 可降低模型探索成本。hosted Loom
+检查只在 Linux 上运行。
 
 ## 条件化 Miri 与 Sanitizer 检查
 

@@ -198,18 +198,20 @@ the normal CI workflow.
 
 `ci-check.sh`, the reusable GitHub Actions workflow, and the CircleCI template
 run Loom model tests only when the project root `Cargo.toml` declares `loom` in
-`[dev-dependencies]`. Projects without that dependency print a skip message and
-do not install an additional Rust toolchain.
+`[dependencies]` or `[dev-dependencies]`. Projects without that dependency
+print a skip message and do not install an additional Rust toolchain.
 
 For an enabled project, the check runs:
 
 ```bash
-RUSTFLAGS="--cfg loom" cargo test --release --all-features
+RUSTFLAGS="--cfg loom" cargo test --release --all-features loom
 ```
 
-The `loom` configuration flag enables tests guarded by `#[cfg(loom)]`; the
-release profile reduces the cost of model exploration. Hosted Loom checks run
-on Linux only.
+The final `loom` filter selects only Loom model tests. The `loom` configuration
+flag enables tests guarded by `#[cfg(loom)]`; ordinary tests must not run with
+that configuration because Loom synchronization primitives require a
+`loom::model` execution context. The release profile reduces the cost of model
+exploration. Hosted Loom checks run on Linux only.
 
 ## Conditional Miri and Sanitizer Checks
 
