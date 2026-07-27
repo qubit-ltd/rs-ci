@@ -5,11 +5,20 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GITHUB_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "rust-ci.yml"
+CIRCLECI_CONFIG = REPO_ROOT / ".circleci" / "config.yml"
 README = REPO_ROOT / "README.md"
 README_ZH_CN = REPO_ROOT / "README.zh_CN.md"
 
 
 class PlatformWorkflowTests(unittest.TestCase):
+    def test_format_checks_include_all_workspace_members(self) -> None:
+        for config_path in (GITHUB_WORKFLOW, CIRCLECI_CONFIG):
+            config = config_path.read_text(encoding="utf-8")
+            self.assertIn(
+                'fmt --all -- --check --config-path "$RUSTFMT_CONFIG"',
+                config,
+            )
+
     def test_platform_jobs_are_opt_in(self) -> None:
         workflow = GITHUB_WORKFLOW.read_text(encoding="utf-8")
 

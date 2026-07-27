@@ -25,16 +25,29 @@ die() {
     exit 1
 }
 
-has_loom_dependency() {
-    local manifest="$PROJECT_ROOT/Cargo.toml"
+load_loom_packages() {
+    local metadata
 
-    [ -f "$manifest" ] || return 1
-    awk '
-        /^\[(dev-)?dependencies\]$/ { dependencies = 1; next }
-        /^\[/ { dependencies = 0 }
-        dependencies && /^[[:space:]]*loom[[:space:]]*=/ { found = 1 }
-        END { exit(found ? 0 : 1) }
-    ' "$manifest"
+    if ! command -v jq > /dev/null 2>&1; then
+        die "required command 'jq' was not found"
+    fi
+    cd "$PROJECT_ROOT"
+    metadata=$(cargo +"$RS_CI_BUILD_TOOLCHAIN" metadata --no-deps --format-version 1)
+    mapfile -t LOOM_PACKAGES < <(
+        jq -r '
+            . as $metadata
+            | .workspace_members[] as $member_id
+            | .packages[]
+            | select(.id == $member_id)
+            | select(any(.dependencies[]; .name == "loom"))
+            | .name
+        ' <<< "$metadata"
+    )
+}
+
+has_loom_dependency() {
+    load_loom_packages
+    [ "${#LOOM_PACKAGES[@]}" -gt 0 ]
 }
 
 if [ "${1:-}" = "--is-configured" ]; then
@@ -52,20 +65,22 @@ if ! has_loom_dependency; then
 fi
 
 cd "$PROJECT_ROOT"
-echo "==> discovering Loom model tests"
-model_list=$(
+for package in "${LOOM_PACKAGES[@]}"; do
+    echo "==> discovering Loom model tests for $package"
+    model_list=$(
+        RUSTFLAGS="--cfg loom" cargo +"$RS_CI_BUILD_TOOLCHAIN" \
+            test --package "$package" --release --all-features loom -- --list
+    )
+    model_count=$(printf '%s\n' "$model_list" | awk '
+        /: test$/ { count += 1 }
+        END { print count + 0 }
+    ')
+    if [ "$model_count" -eq 0 ]; then
+        die "no Loom model tests were discovered for $package; model test names must contain 'loom'"
+    fi
+    printf '%s\n' "$model_list"
+    echo "==> running $model_count Loom model test(s) for $package"
     RUSTFLAGS="--cfg loom" cargo +"$RS_CI_BUILD_TOOLCHAIN" \
-        test --release --all-features loom -- --list
-)
-model_count=$(printf '%s\n' "$model_list" | awk '
-    /: test$/ { count += 1 }
-    END { print count + 0 }
-')
-if [ "$model_count" -eq 0 ]; then
-    die "no Loom model tests were discovered; model test names must contain 'loom'"
-fi
-printf '%s\n' "$model_list"
-echo "==> running $model_count Loom model test(s)"
-RUSTFLAGS="--cfg loom" cargo +"$RS_CI_BUILD_TOOLCHAIN" \
-    test --release --all-features --verbose loom
+        test --package "$package" --release --all-features --verbose loom
+done
 echo "Loom model checks passed."
