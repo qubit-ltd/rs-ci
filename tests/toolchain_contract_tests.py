@@ -14,6 +14,7 @@ SHELL_SCRIPTS = (
     REPO_ROOT / "cargo-fuzz-check.sh",
     REPO_ROOT / "cargo-miri-check.sh",
     REPO_ROOT / "cargo-sanitizer-check.sh",
+    REPO_ROOT / "coverage.sh",
 )
 GITHUB_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "rust-ci.yml"
 CIRCLECI_CONFIG = REPO_ROOT / ".circleci" / "config.yml"
@@ -25,6 +26,14 @@ class ToolchainContractTests(unittest.TestCase):
         config = TOOLCHAIN_CONFIG.read_text(encoding="utf-8")
 
         self.assertIn('RS_CI_DEFAULT_BUILD_TOOLCHAIN="1.94.0"', config)
+        self.assertRegex(
+            config,
+            r'RS_CI_DEFAULT_CARGO_LLVM_COV_VERSION="\d+\.\d+\.\d+"',
+        )
+        self.assertRegex(
+            config,
+            r'RS_CI_DEFAULT_CARGO_FUZZ_VERSION="\d+\.\d+\.\d+"',
+        )
         for variable in (
             "RS_CI_DEFAULT_FMT_TOOLCHAIN",
             "RS_CI_DEFAULT_CLIPPY_TOOLCHAIN",
@@ -46,6 +55,16 @@ class ToolchainContractTests(unittest.TestCase):
                 self.assertNotIn("RS_CI_DEFAULT_LINT_TOOLCHAIN", script)
                 self.assertNotIn("${RUST_TOOLCHAIN:-", script)
                 self.assertNotRegex(script, r"nightly-\d{4}-\d{2}-\d{2}")
+
+    def test_workflow_resolves_versions_from_the_shared_contract(self) -> None:
+        workflow = GITHUB_WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn("resolve_toolchains:", workflow)
+        self.assertIn('source "$TOOLCHAIN_CONTRACT"', workflow)
+        self.assertIn("CARGO_LLVM_COV_VERSION", workflow)
+        self.assertIn("CARGO_FUZZ_VERSION", workflow)
+        self.assertNotIn('default: "0.6.21"', workflow)
+        self.assertNotIn('default: "0.13.2"', workflow)
 
     def test_contract_rejects_floating_nightly_overrides(self) -> None:
         result = subprocess.run(

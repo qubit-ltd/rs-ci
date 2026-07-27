@@ -97,6 +97,10 @@ def write_fake_tools(bin_dir: Path, log_path: Path) -> None:
                 cat "$FAKE_CARGO_METADATA"
                 exit "${{FAKE_METADATA_STATUS:-0}}"
             fi
+            if [ "${{1:-}}" = "llvm-cov" ] && [ "${{2:-}}" = "--version" ]; then
+                echo "cargo-llvm-cov ${{FAKE_CARGO_LLVM_COV_VERSION:-0.8.5}}"
+                exit 0
+            fi
             printf 'LLVM_COV=%s\\n' "${{LLVM_COV-<unset>}}" >> "{log_path}"
             printf 'LLVM_PROFDATA=%s\\n' "${{LLVM_PROFDATA-<unset>}}" >> "{log_path}"
             printf 'ARGS=%s\\n' "$*" >> "{log_path}"

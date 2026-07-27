@@ -46,9 +46,15 @@ class FuzzWorkflowTests(unittest.TestCase):
     def test_github_workflow_has_conditional_fuzz_smoke_job(self) -> None:
         workflow = GITHUB_WORKFLOW.read_text(encoding="utf-8")
 
-        self.assertIn("cargo_fuzz_version:", workflow)
-        self.assertIn('default: "0.13.2"', workflow)
-        self.assertIn("cargo_fuzz_toolchain:", workflow)
+        self.assertIn("resolve_toolchains:", workflow)
+        self.assertIn(
+            "CARGO_FUZZ_VERSION: ${{ needs.resolve_toolchains.outputs.cargo_fuzz }}",
+            workflow,
+        )
+        self.assertIn(
+            "RS_CI_FUZZ_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.fuzz }}",
+            workflow,
+        )
         self.assertIn("cargo_fuzz_mode:", workflow)
         self.assertIn(
             'description: "Conditional fuzz check mode: smoke, build-only, or disabled."',

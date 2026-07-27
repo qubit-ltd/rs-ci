@@ -14,17 +14,17 @@ def job_block(workflow: str, job: str, next_job: str) -> str:
 
 
 class AdvancedChecksWorkflowTests(unittest.TestCase):
-    def test_workflow_exposes_pinned_toolchain_inputs(self) -> None:
+    def test_workflow_resolves_pinned_toolchains_from_the_contract(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
 
-        self.assertIn("miri_toolchain:", workflow)
-        self.assertIn("sanitizer_toolchain:", workflow)
+        self.assertIn("resolve_toolchains:", workflow)
+        self.assertIn('source "$TOOLCHAIN_CONTRACT"', workflow)
         self.assertIn(
-            "RS_CI_MIRI_TOOLCHAIN: ${{ inputs.miri_toolchain }}",
+            "RS_CI_MIRI_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.miri }}",
             workflow,
         )
         self.assertIn(
-            "RS_CI_SANITIZER_TOOLCHAIN: ${{ inputs.sanitizer_toolchain }}",
+            "RS_CI_SANITIZER_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.sanitizer }}",
             workflow,
         )
 

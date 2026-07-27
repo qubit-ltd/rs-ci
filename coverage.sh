@@ -14,7 +14,11 @@
 
 set -euo pipefail
 
-RS_CI_BUILD_TOOLCHAIN="${RS_CI_BUILD_TOOLCHAIN:-1.94.0}"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=toolchains.sh
+source "$SCRIPT_DIR/toolchains.sh"
+configure_rs_ci_toolchains
+
 MIN_FUNCTION_COVERAGE="${MIN_FUNCTION_COVERAGE:-100}"
 MIN_LINE_COVERAGE="${MIN_LINE_COVERAGE:-95}"
 MIN_REGION_COVERAGE="${MIN_REGION_COVERAGE:-95}"
@@ -736,6 +740,7 @@ esac
 
 require_command cargo
 require_command cargo-llvm-cov
+require_rs_ci_cargo_llvm_cov
 require_command jq
 ignore_invalid_llvm_tool_overrides
 
