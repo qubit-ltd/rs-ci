@@ -87,8 +87,8 @@ fi
 ensure_lint_toolchains
 print_rs_ci_lint_versions
 
-echo "==> cargo +$RS_CI_FMT_TOOLCHAIN fmt -- --config-path $RUSTFMT_CONFIG"
-cargo +"$RS_CI_FMT_TOOLCHAIN" fmt -- --config-path "$RUSTFMT_CONFIG"
+echo "==> cargo +$RS_CI_FMT_TOOLCHAIN fmt --all -- --config-path $RUSTFMT_CONFIG"
+cargo +"$RS_CI_FMT_TOOLCHAIN" fmt --all -- --config-path "$RUSTFMT_CONFIG"
 if [ -f "$PROJECT_ROOT/fuzz/Cargo.toml" ]; then
     echo "==> cargo +$RS_CI_FMT_TOOLCHAIN fmt --manifest-path $PROJECT_ROOT/fuzz/Cargo.toml -- --config-path $RUSTFMT_CONFIG"
     cargo +"$RS_CI_FMT_TOOLCHAIN" fmt \

@@ -40,10 +40,22 @@ scan_aggregation_file_items() {
     local file="$1"
 
     awk '
+        /^[[:space:]]*#\[[[:space:]]*proc_macro(_attribute|_derive)?([[:space:](]|$)/ {
+            proc_macro_entrypoint = 1
+            next
+        }
+        /^[[:space:]]*#/ {
+            next
+        }
         /^[[:space:]]*(pub([[:space:]]*\([^)]*\))?[[:space:]]+)?(async[[:space:]]+fn|fn|struct|enum|trait|type|const|static|impl|macro_rules!)([[:space:]<{!(]|$)/ {
+            if (proc_macro_entrypoint && $0 ~ /^[[:space:]]*(pub([[:space:]]*\([^)]*\))?[[:space:]]+)?(async[[:space:]]+)?fn([[:space:]<{(]|$)/) {
+                proc_macro_entrypoint = 0
+                next
+            }
             line = $0
             sub(/^[[:space:]]*/, "", line)
             print FNR ":" line
+            proc_macro_entrypoint = 0
         }
     ' "$file"
 }

@@ -16,9 +16,9 @@
 - `rs-ci-metadata.sh`：读取 package 级 CI opt-in 的共享 Cargo metadata 脚本。
 - `cargo-miri-check.sh`：按条件运行的 Miri 测试脚本。
 - `cargo-sanitizer-check.sh`：按条件运行的 sanitizer 测试脚本。
-- `cargo-package-check.sh`：运行 `cargo package --allow-dirty` 的本地打包验证脚本。
-- `readme-version-check.py`：README 依赖片段检查脚本，要求当前 crate 使用 `major.minor` 版本。
-- `style-check.sh`：检查 rustfmt 和 clippy 不覆盖的 Rust 源码布局约束。
+- `cargo-package-check.sh`：对每个可发布 Cargo workspace member 运行带 `--allow-dirty` 的打包验证。
+- `readme-version-check.py`：检查所有 workspace package README 的依赖片段是否匹配 Cargo 解析后的 `major.minor` 版本。
+- `style-check.sh`：检查 Cargo workspace default members 中 rustfmt 和 clippy 不覆盖的 Rust 源码布局约束。
 - `coverage.sh`：本地覆盖率报告生成和阈值检查脚本。
 - `page/`：可复用的 GitHub Pages 构建器、模板、样式和默认配置。
 - `rustfmt.toml`：本地脚本和 CI 使用的共享 rustfmt 配置。
@@ -182,9 +182,10 @@ cargo install cargo-fuzz
 
 ## 条件化 Loom 模型检查
 
-`ci-check.sh`、可复用 GitHub Actions workflow 和 CircleCI 模板仅在项目根目录
-`Cargo.toml` 的 `[dependencies]` 或 `[dev-dependencies]` 中声明 `loom` 时运行
-Loom 模型测试。未声明该依赖的项目会输出跳过信息，也不会安装额外的 Rust 工具链。
+`ci-check.sh`、可复用 GitHub Actions workflow 和 CircleCI 模板会为每个声明
+`loom` 依赖（位于 `[dependencies]` 或 `[dev-dependencies]`）的 workspace package
+运行 Loom 模型测试。没有这类 package 的项目会输出跳过信息，也不会安装额外的
+Rust 工具链。
 
 启用后，检查会运行：
 
@@ -266,6 +267,10 @@ Cargo 默认 feature 选择，不额外检查其他 feature 组合。
 `allFeatures` 设为 `true` 来显式声明 all-features 检查。matrix 由项目声明，
 `rs-ci` 不会尝试从 `Cargo.toml` 自动推断所有有效 feature 组合。
 
+Workspace 检查可以通过非空 `packages` 列表指定准确的 Cargo package 名称。
+运行器会把每个选择转换为 `--package`；省略 `packages` 时保留 Cargo 的默认
+package 选择行为。
+
 ## GitHub Pages 站点
 
 把仓库 Pages source 设为 **GitHub Actions**。默认分支 `push` 部署会发布：
@@ -303,8 +308,8 @@ Cargo 命令之前拒绝浮动的 `nightly`，共享默认值统一定义在 `to
 - `RS_CI_CARGO_HOME_ROOT`：当 `RS_CI_CARGO_HOME_MODE=project` 时，per-project Cargo home 的根目录；默认是 `$XDG_CACHE_HOME/rs-ci/cargo-home` 或 `$HOME/.cache/rs-ci/cargo-home`。
 - `RUN_COVERAGE_CFG_CLIPPY`：设为 `1` 时，使用 `RUSTFLAGS="--cfg coverage"` 运行 clippy。
 - `RUN_COVERAGE_IN_ALIGN`：设为 `1` 时，从 `align-ci.sh` 运行 `coverage.sh json`；默认是 `0`。
-- `STYLE_SOURCE_DIR`：`style-check.sh` 检查的源码目录；默认是 `src`。
-- `STYLE_TEST_DIR`：`style-check.sh` 检查的测试目录；默认是 `tests`。
+- `STYLE_SOURCE_DIR`：`style-check.sh` 显式检查的源码目录；设置后进入兼容的单目录模式。
+- `STYLE_TEST_DIR`：`style-check.sh` 显式检查的测试目录；设置后进入兼容的单目录模式。两者均未设置时，对 Cargo workspace default members 使用各 package 内的 `src` 与 `tests` 目录。
 - `STYLE_ENFORCE_INLINE_TESTS`：设为 `0` 时允许在源码文件中使用 `#[cfg(test)]` 或 `#[test]`；默认是 `1`。
 - `STYLE_ENFORCE_TEST_FILE_NAMES`：设为 `0` 时关闭测试文件命名检查；默认是 `1`。
 - `STYLE_ENFORCE_SOURCE_TEST_PAIRS`：设为 `0` 时允许具体源码文件没有对应的 `*_tests.rs` 文件；默认是 `1`。

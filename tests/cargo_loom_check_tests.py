@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -11,6 +12,8 @@ CHECKER = REPO_ROOT / "cargo-loom-check.sh"
 
 
 def write_manifest(project_root: Path, development_dependencies: str = "") -> None:
+    (project_root / "src").mkdir(exist_ok=True)
+    (project_root / "src" / "lib.rs").write_text("", encoding="utf-8")
     (project_root / "Cargo.toml").write_text(
         "[package]\n"
         'name = "example"\n'
@@ -26,9 +29,15 @@ def write_fake_cargo(
     rustflags_log: Path,
     model_list_path: Path,
 ) -> None:
+    real_cargo = shutil.which("cargo")
+    if real_cargo is None:
+        raise RuntimeError("cargo is required for this test")
     cargo = bin_dir / "cargo"
     cargo.write_text(
         "#!/bin/sh\n"
+        "case \" $* \" in\n"
+        f"    *' metadata '*) exec \"{real_cargo}\" \"$@\" ;;\n"
+        "esac\n"
         f"printf '%s\\n' \"$*\" >> \"{command_log}\"\n"
         f"printf '%s\\n' \"${{RUSTFLAGS-}}\" >> \"{rustflags_log}\"\n"
         "case \" $* \" in\n"
@@ -146,17 +155,35 @@ class CargoLoomCheckTests(unittest.TestCase):
 
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertIn(
-            "+1.94.0 test --release --all-features loom -- --list",
+            "+1.94.0 test --package example --release --all-features loom -- --list",
             self.command_log(),
         )
         self.assertIn(
-            "+1.94.0 test --release --all-features --verbose loom",
+            "+1.94.0 test --package example --release --all-features --verbose loom",
             self.command_log(),
         )
         self.assertEqual(
             ["--cfg loom", "--cfg loom"],
             self.rustflags_log().splitlines(),
         )
+
+    def test_runs_loom_models_for_workspace_child_package(self) -> None:
+        (self.project_root / "Cargo.toml").write_text(
+            '[workspace]\nmembers = ["child"]\nresolver = "3"\n',
+            encoding="utf-8",
+        )
+        child = self.project_root / "child"
+        child.mkdir()
+        write_manifest(child, '[dev-dependencies]\nloom = "0.7"\n')
+        self.model_list_path.write_text(
+            "model::test_loom_child: test\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_checker()
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("--package example", self.command_log())
 
 
 if __name__ == "__main__":
