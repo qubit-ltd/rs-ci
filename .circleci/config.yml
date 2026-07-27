@@ -71,7 +71,7 @@ commands:
 jobs:
   fast_checks:
     docker:
-      - image: rustlang/rust:nightly
+      - image: rust:1.94.0
     environment:
       RS_CI_FMT_TOOLCHAIN: nightly-2026-06-05
       RS_CI_CLIPPY_TOOLCHAIN: nightly-2026-06-05
@@ -81,6 +81,12 @@ jobs:
       - run:
           name: Install rustfmt and clippy
           command: |
+            if [ -f .rs-ci/toolchains.sh ]; then
+              TOOLCHAIN_CONTRACT=.rs-ci/toolchains.sh
+            else
+              TOOLCHAIN_CONTRACT=toolchains.sh
+            fi
+            bash "$TOOLCHAIN_CONTRACT"
             rustup toolchain install "$RS_CI_FMT_TOOLCHAIN" --profile minimal
             rustup component add rustfmt --toolchain "$RS_CI_FMT_TOOLCHAIN"
             rustup toolchain install "$RS_CI_CLIPPY_TOOLCHAIN" --profile minimal
@@ -93,7 +99,12 @@ jobs:
             else
               RUSTFMT_CONFIG=rustfmt.toml
             fi
-            cargo +"$RS_CI_FMT_TOOLCHAIN" fmt -- --check --config-path "$RUSTFMT_CONFIG"
+            cargo +"$RS_CI_FMT_TOOLCHAIN" fmt --all -- --check --config-path "$RUSTFMT_CONFIG"
+            if [ -f fuzz/Cargo.toml ]; then
+              cargo +"$RS_CI_FMT_TOOLCHAIN" fmt \
+                --manifest-path fuzz/Cargo.toml \
+                -- --check --config-path "$RUSTFMT_CONFIG"
+            fi
       - run:
           name: Run clippy
           command: cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
@@ -107,9 +118,89 @@ jobs:
             fi
       - save_cargo_cache
 
+  fuzz_smoke:
+    docker:
+      - image: rust:1.94.0
+    environment:
+      CARGO_FUZZ_VERSION: "0.13.2"
+      RS_CI_FUZZ_TOOLCHAIN: nightly-2026-06-05
+      RS_CI_FUZZ_MODE: smoke
+      RS_CI_FUZZ_SECONDS_PER_TARGET: "10"
+      RS_CI_FUZZ_MAX_LEN: "4096"
+    steps:
+      - checkout_https
+      - restore_cache:
+          keys:
+            - v1-cargo-fuzz-0.13.2-nightly-2026-06-05-{{ arch }}
+      - run:
+          name: Run conditional cargo-fuzz smoke checks
+          command: |
+            set -euo pipefail
+            if [ -x .rs-ci/cargo-fuzz-check.sh ]; then
+              CHECKER=.rs-ci/cargo-fuzz-check.sh
+            elif [ -x ./cargo-fuzz-check.sh ]; then
+              CHECKER=./cargo-fuzz-check.sh
+            else
+              echo "cargo-fuzz-check.sh was not found" >&2
+              exit 1
+            fi
+            if [ "$RS_CI_FUZZ_MODE" = "disabled" ]; then
+              echo "cargo-fuzz checks are disabled; skipping."
+              exit 0
+            fi
+            if ! RS_CI_PROJECT_ROOT="$PWD" "$CHECKER" --is-configured; then
+              echo "cargo-fuzz is not configured; skipping."
+              exit 0
+            fi
+            rustup toolchain install "$RS_CI_FUZZ_TOOLCHAIN" --profile minimal
+            if ! command -v cargo-fuzz > /dev/null 2>&1; then
+              cargo install --locked cargo-fuzz --version "$CARGO_FUZZ_VERSION"
+            fi
+            RS_CI_PROJECT_ROOT="$PWD" "$CHECKER"
+      - run:
+          name: Prepare fuzz artifact directory
+          when: on_fail
+          command: |
+            mkdir -p fuzz/artifacts
+            touch fuzz/artifacts/.rs-ci-artifact-placeholder
+      - save_cache:
+          key: v1-cargo-fuzz-0.13.2-nightly-2026-06-05-{{ arch }}
+          paths:
+            - "~/.cargo/bin/cargo-fuzz"
+      - store_artifacts:
+          path: fuzz/artifacts
+          destination: fuzz-artifacts
+          when: on_fail
+
+  loom:
+    docker:
+      - image: rust:1.94.0
+    environment:
+      RS_CI_BUILD_TOOLCHAIN: "1.94.0"
+    steps:
+      - checkout_https
+      - run:
+          name: Conditional Loom model checks
+          command: |
+            set -euo pipefail
+            if [ -x .rs-ci/cargo-loom-check.sh ]; then
+              CHECKER=.rs-ci/cargo-loom-check.sh
+            elif [ -x ./cargo-loom-check.sh ]; then
+              CHECKER=./cargo-loom-check.sh
+            else
+              echo "cargo-loom-check.sh was not found" >&2
+              exit 1
+            fi
+            if ! RS_CI_PROJECT_ROOT="$PWD" "$CHECKER" --is-configured; then
+              echo "loom is not configured; skipping."
+              exit 0
+            fi
+            rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
+            RS_CI_PROJECT_ROOT="$PWD" "$CHECKER"
+
   build_test_coverage:
     docker:
-      - image: rustlang/rust:nightly
+      - image: rust:1.94.0
     resource_class: medium+
     environment:
       RS_CI_BUILD_TOOLCHAIN: "1.94.0"
@@ -218,7 +309,7 @@ jobs:
 
   doc:
     docker:
-      - image: rustlang/rust:nightly
+      - image: rust:1.94.0
     environment:
       RS_CI_BUILD_TOOLCHAIN: "1.94.0"
     steps:
@@ -238,7 +329,7 @@ jobs:
 
   security_audit:
     docker:
-      - image: rustlang/rust:nightly
+      - image: rust:1.94.0
     environment:
       RS_CI_BUILD_TOOLCHAIN: "1.94.0"
     steps:
@@ -323,6 +414,12 @@ workflows:
     jobs:
       - fast_checks
       - build_test_coverage:
+          requires:
+            - fast_checks
+      - fuzz_smoke:
+          requires:
+            - fast_checks
+      - loom:
           requires:
             - fast_checks
       - windows_test:

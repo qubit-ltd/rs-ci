@@ -13,12 +13,14 @@
 
 set -euo pipefail
 
+STYLE_SOURCE_DIR_EXPLICIT="${STYLE_SOURCE_DIR+x}"
+STYLE_TEST_DIR_EXPLICIT="${STYLE_TEST_DIR+x}"
 STYLE_SOURCE_DIR="${STYLE_SOURCE_DIR:-src}"
 STYLE_TEST_DIR="${STYLE_TEST_DIR:-tests}"
 STYLE_ENFORCE_INLINE_TESTS="${STYLE_ENFORCE_INLINE_TESTS:-1}"
 STYLE_ENFORCE_TEST_FILE_NAMES="${STYLE_ENFORCE_TEST_FILE_NAMES:-1}"
 STYLE_ENFORCE_TEST_REDIRECTS="${STYLE_ENFORCE_TEST_REDIRECTS:-1}"
-STYLE_ENFORCE_SOURCE_TEST_PAIRS="${STYLE_ENFORCE_SOURCE_TEST_PAIRS:-0}"
+STYLE_ENFORCE_SOURCE_TEST_PAIRS="${STYLE_ENFORCE_SOURCE_TEST_PAIRS:-1}"
 STYLE_ENFORCE_PUBLIC_TYPE_FILES="${STYLE_ENFORCE_PUBLIC_TYPE_FILES:-1}"
 STYLE_ENFORCE_EXPLICIT_IMPORTS="${STYLE_ENFORCE_EXPLICIT_IMPORTS:-1}"
 STYLE_ENFORCE_AGGREGATION_FILES="${STYLE_ENFORCE_AGGREGATION_FILES:-1}"
@@ -87,6 +89,58 @@ print_usage() {
     echo "  coverage-cfg | src/example.rs | Reason why coverage cfg is unavoidable"
 }
 
+# Purpose: Run all configured rules for one Cargo package or explicit directory pair.
+run_style_checks() {
+    local source_root="$1"
+    local test_root="$2"
+
+    check_inline_tests "$source_root"
+    check_test_file_names "$test_root"
+    check_test_redirects "$test_root"
+    check_source_test_pairs "$source_root" "$test_root"
+    check_public_type_files "$source_root"
+    check_aggregation_files "$source_root" "$test_root"
+    check_explicit_imports "$source_root" "$test_root"
+    check_coverage_cfg "$source_root"
+}
+
+# Purpose: Run style rules for Cargo workspace default members.
+run_workspace_style_checks() {
+    local metadata
+    local package_rows
+    local package_name
+    local manifest_path
+    local package_root
+    local source_root
+    local test_root
+
+    require_command cargo
+    require_command jq
+    metadata=$(cargo metadata --no-deps --format-version 1)
+    package_rows=$(jq -r '
+        . as $metadata
+        | .workspace_default_members[] as $member_id
+        | .packages[]
+        | select(.id == $member_id)
+        | [.name, .manifest_path]
+        | @tsv
+    ' <<< "$metadata")
+    if [ -z "$package_rows" ]; then
+        echo "error: Cargo metadata did not report any workspace default members" >&2
+        exit 1
+    fi
+
+    while IFS=$'\t' read -r package_name manifest_path; do
+        package_root=$(dirname "$manifest_path")
+        source_root="$package_root/src"
+        test_root="$package_root/tests"
+        STYLE_SOURCE_DIR="${source_root#"$PROJECT_ROOT"/}"
+        STYLE_TEST_DIR="${test_root#"$PROJECT_ROOT"/}"
+        echo "Checking Cargo package: $package_name"
+        run_style_checks "$source_root" "$test_root"
+    done <<< "$package_rows"
+}
+
 # Purpose: Parse arguments, initialize context, and run all configured style rules.
 main() {
     local arg="${1:-}"
@@ -109,6 +163,7 @@ main() {
 
     require_command awk
     require_command basename
+    require_command dirname
     require_command find
     require_command grep
     require_command sed
@@ -116,25 +171,22 @@ main() {
     require_command wc
 
     PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$script_dir}"
+    PROJECT_ROOT=$(cd "$PROJECT_ROOT" && pwd)
     if [ -z "$STYLE_ALLOWLIST_FILE" ]; then
         STYLE_ALLOWLIST_FILE="$PROJECT_ROOT/.qubit-style-allowlist"
     fi
     cd "$PROJECT_ROOT"
 
-    source_root="$PROJECT_ROOT/$STYLE_SOURCE_DIR"
-    test_root="$PROJECT_ROOT/$STYLE_TEST_DIR"
-
     echo "Running Rust style checks in $PROJECT_ROOT"
     echo ""
 
-    check_inline_tests "$source_root"
-    check_test_file_names "$test_root"
-    check_test_redirects "$test_root"
-    check_source_test_pairs "$source_root" "$test_root"
-    check_public_type_files "$source_root"
-    check_aggregation_files "$source_root" "$test_root"
-    check_explicit_imports "$source_root" "$test_root"
-    check_coverage_cfg "$source_root"
+    if [ -n "$STYLE_SOURCE_DIR_EXPLICIT" ] || [ -n "$STYLE_TEST_DIR_EXPLICIT" ]; then
+        source_root="$PROJECT_ROOT/$STYLE_SOURCE_DIR"
+        test_root="$PROJECT_ROOT/$STYLE_TEST_DIR"
+        run_style_checks "$source_root" "$test_root"
+    else
+        run_workspace_style_checks
+    fi
 
     echo ""
     if [ "$FAILURES" -gt 0 ]; then

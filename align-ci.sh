@@ -14,16 +14,13 @@
 
 set -euo pipefail
 
-RS_CI_DEFAULT_LINT_TOOLCHAIN="${RUST_TOOLCHAIN:-nightly-2026-06-05}"
-RS_CI_BUILD_TOOLCHAIN="${RS_CI_BUILD_TOOLCHAIN:-1.94.0}"
-RS_CI_FMT_TOOLCHAIN="${RS_CI_FMT_TOOLCHAIN:-$RS_CI_DEFAULT_LINT_TOOLCHAIN}"
-RS_CI_CLIPPY_TOOLCHAIN="${RS_CI_CLIPPY_TOOLCHAIN:-$RS_CI_DEFAULT_LINT_TOOLCHAIN}"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=toolchains.sh
+source "$SCRIPT_DIR/toolchains.sh"
+configure_rs_ci_toolchains
+
 RUN_COVERAGE_CFG_CLIPPY="${RUN_COVERAGE_CFG_CLIPPY:-0}"
 RUN_COVERAGE_IN_ALIGN="${RUN_COVERAGE_IN_ALIGN:-0}"
-
-export RS_CI_BUILD_TOOLCHAIN
-export RS_CI_FMT_TOOLCHAIN
-export RS_CI_CLIPPY_TOOLCHAIN
 
 require_command() {
     if ! command -v "$1" > /dev/null 2>&1; then
@@ -63,12 +60,16 @@ ensure_lint_toolchains() {
     fi
 }
 
+RUSTFMT_CONFIG="${RS_CI_RUSTFMT_CONFIG:-$SCRIPT_DIR/rustfmt.toml}"
+PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
+
+# shellcheck source=cargo-env.sh
+source "$SCRIPT_DIR/cargo-env.sh"
+configure_rs_ci_cargo_home "$PROJECT_ROOT"
+
 require_command cargo
 require_command rustup
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-RUSTFMT_CONFIG="${RS_CI_RUSTFMT_CONFIG:-$SCRIPT_DIR/rustfmt.toml}"
-PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
 cd "$PROJECT_ROOT"
 
 if [ ! -f "$RUSTFMT_CONFIG" ]; then
@@ -79,11 +80,21 @@ fi
 echo "Build toolchain: $RS_CI_BUILD_TOOLCHAIN"
 echo "Rustfmt toolchain: $RS_CI_FMT_TOOLCHAIN"
 echo "Clippy toolchain: $RS_CI_CLIPPY_TOOLCHAIN"
+if [ "${RS_CI_CARGO_HOME_MODE:-project}" = "project" ]; then
+    echo "Cargo home: $CARGO_HOME"
+fi
 
 ensure_lint_toolchains
+print_rs_ci_lint_versions
 
-echo "==> cargo +$RS_CI_FMT_TOOLCHAIN fmt -- --config-path $RUSTFMT_CONFIG"
-cargo +"$RS_CI_FMT_TOOLCHAIN" fmt -- --config-path "$RUSTFMT_CONFIG"
+echo "==> cargo +$RS_CI_FMT_TOOLCHAIN fmt --all -- --config-path $RUSTFMT_CONFIG"
+cargo +"$RS_CI_FMT_TOOLCHAIN" fmt --all -- --config-path "$RUSTFMT_CONFIG"
+if [ -f "$PROJECT_ROOT/fuzz/Cargo.toml" ]; then
+    echo "==> cargo +$RS_CI_FMT_TOOLCHAIN fmt --manifest-path $PROJECT_ROOT/fuzz/Cargo.toml -- --config-path $RUSTFMT_CONFIG"
+    cargo +"$RS_CI_FMT_TOOLCHAIN" fmt \
+        --manifest-path "$PROJECT_ROOT/fuzz/Cargo.toml" \
+        -- --config-path "$RUSTFMT_CONFIG"
+fi
 
 echo "==> cargo +$RS_CI_CLIPPY_TOOLCHAIN clippy --fix (all targets / features)"
 cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --fix --allow-dirty --allow-staged --all-targets --all-features
