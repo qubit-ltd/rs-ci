@@ -17,6 +17,8 @@ RS_CI_DEFAULT_CLIPPY_TOOLCHAIN="nightly-2026-06-05"
 RS_CI_DEFAULT_FUZZ_TOOLCHAIN="nightly-2026-06-05"
 RS_CI_DEFAULT_MIRI_TOOLCHAIN="nightly-2026-06-05"
 RS_CI_DEFAULT_SANITIZER_TOOLCHAIN="nightly-2026-06-05"
+RS_CI_DEFAULT_CARGO_LLVM_COV_VERSION="0.8.5"
+RS_CI_DEFAULT_CARGO_FUZZ_VERSION="0.13.2"
 
 validate_rs_ci_toolchain() {
     local variable_name="$1"
@@ -36,6 +38,8 @@ configure_rs_ci_toolchains() {
     RS_CI_FUZZ_TOOLCHAIN="${RS_CI_FUZZ_TOOLCHAIN:-$RS_CI_DEFAULT_FUZZ_TOOLCHAIN}"
     RS_CI_MIRI_TOOLCHAIN="${RS_CI_MIRI_TOOLCHAIN:-$RS_CI_DEFAULT_MIRI_TOOLCHAIN}"
     RS_CI_SANITIZER_TOOLCHAIN="${RS_CI_SANITIZER_TOOLCHAIN:-$RS_CI_DEFAULT_SANITIZER_TOOLCHAIN}"
+    CARGO_LLVM_COV_VERSION="${CARGO_LLVM_COV_VERSION:-$RS_CI_DEFAULT_CARGO_LLVM_COV_VERSION}"
+    CARGO_FUZZ_VERSION="${CARGO_FUZZ_VERSION:-$RS_CI_DEFAULT_CARGO_FUZZ_VERSION}"
 
     validate_rs_ci_toolchain RS_CI_BUILD_TOOLCHAIN "$RS_CI_BUILD_TOOLCHAIN" || return 1
     validate_rs_ci_toolchain RS_CI_FMT_TOOLCHAIN "$RS_CI_FMT_TOOLCHAIN" || return 1
@@ -50,6 +54,21 @@ configure_rs_ci_toolchains() {
     export RS_CI_FUZZ_TOOLCHAIN
     export RS_CI_MIRI_TOOLCHAIN
     export RS_CI_SANITIZER_TOOLCHAIN
+    export CARGO_LLVM_COV_VERSION
+    export CARGO_FUZZ_VERSION
+}
+
+require_rs_ci_cargo_llvm_cov() {
+    local installed_version
+
+    if ! installed_version=$(cargo llvm-cov --version 2> /dev/null); then
+        echo "error: cargo-llvm-cov $CARGO_LLVM_COV_VERSION is required" >&2
+        return 1
+    fi
+    if [[ "$installed_version" != "cargo-llvm-cov $CARGO_LLVM_COV_VERSION"* ]]; then
+        echo "error: cargo-llvm-cov $CARGO_LLVM_COV_VERSION is required; found $installed_version" >&2
+        return 1
+    fi
 }
 
 print_rs_ci_lint_versions() {
@@ -65,4 +84,6 @@ if [[ "${BASH_SOURCE[0]}" = "$0" ]]; then
     echo "Fuzz toolchain: $RS_CI_FUZZ_TOOLCHAIN"
     echo "Miri toolchain: $RS_CI_MIRI_TOOLCHAIN"
     echo "Sanitizer toolchain: $RS_CI_SANITIZER_TOOLCHAIN"
+    echo "cargo-llvm-cov version: $CARGO_LLVM_COV_VERSION"
+    echo "cargo-fuzz version: $CARGO_FUZZ_VERSION"
 fi
