@@ -16,9 +16,9 @@ Shared scripts and CircleCI/GitHub Actions configuration for checking Rust code 
 - `rs-ci-metadata.sh`: shared Cargo metadata reader for package-scoped CI opt-ins.
 - `cargo-miri-check.sh`: conditional Miri test runner.
 - `cargo-sanitizer-check.sh`: conditional sanitizer test runner.
-- `cargo-package-check.sh`: local package verification script that runs `cargo package --allow-dirty`.
-- `readme-version-check.py`: README dependency snippet checker that enforces current-crate `major.minor` versions.
-- `style-check.sh`: project-specific Rust source layout checks that rustfmt and clippy do not cover.
+- `cargo-package-check.sh`: packages every publishable Cargo workspace member with `--allow-dirty`.
+- `readme-version-check.py`: checks dependency snippets in every workspace package README against Cargo-resolved `major.minor` versions.
+- `style-check.sh`: Rust source layout checks for Cargo workspace default members that rustfmt and clippy do not cover.
 - `coverage.sh`: local coverage report generator and threshold checker.
 - `page/`: reusable GitHub Pages builder, template, styles, and default configuration.
 - `rustfmt.toml`: shared rustfmt configuration used by the local scripts and CI.
@@ -197,9 +197,9 @@ the normal CI workflow.
 ## Conditional Loom Model Checks
 
 `ci-check.sh`, the reusable GitHub Actions workflow, and the CircleCI template
-run Loom model tests only when the project root `Cargo.toml` declares `loom` in
-`[dev-dependencies]`. Projects without that dependency print a skip message and
-do not install an additional Rust toolchain.
+run Loom model tests for each workspace package that declares a `loom`
+dependency, normally in `[dev-dependencies]`. Projects without such a package
+print a skip message and do not install an additional Rust toolchain.
 
 For an enabled project, the check runs:
 
@@ -285,6 +285,10 @@ list, and `allFeatures` can be set to `true` for an explicit all-features entry.
 The matrix is intentionally project-declared; `rs-ci` does not try to infer all
 valid feature combinations from `Cargo.toml`.
 
+Workspace checks can set `packages` to a non-empty list of exact Cargo package
+names. The runner forwards each selection as `--package`; omitting `packages`
+keeps Cargo's default package selection.
+
 ## GitHub Pages Site
 
 Set the repository Pages source to **GitHub Actions**. The default-branch
@@ -326,8 +330,8 @@ are defined in `toolchains.sh`.
 - `RS_CI_CARGO_HOME_ROOT`: root directory for per-project Cargo homes when `RS_CI_CARGO_HOME_MODE=project`; defaults to `$XDG_CACHE_HOME/rs-ci/cargo-home` or `$HOME/.cache/rs-ci/cargo-home`.
 - `RUN_COVERAGE_CFG_CLIPPY`: set to `1` to run clippy with `RUSTFLAGS="--cfg coverage"`.
 - `RUN_COVERAGE_IN_ALIGN`: set to `1` to run `coverage.sh json` from `align-ci.sh`; defaults to `0`.
-- `STYLE_SOURCE_DIR`: source directory checked by `style-check.sh`; defaults to `src`.
-- `STYLE_TEST_DIR`: test directory checked by `style-check.sh`; defaults to `tests`.
+- `STYLE_SOURCE_DIR`: explicit source directory checked by `style-check.sh`; setting it opts into legacy single-directory mode.
+- `STYLE_TEST_DIR`: explicit test directory checked by `style-check.sh`; setting it opts into legacy single-directory mode. When neither directory is set, all Cargo workspace default members use their package-relative `src` and `tests` directories.
 - `STYLE_ENFORCE_INLINE_TESTS`: set to `0` to allow `#[cfg(test)]` or `#[test]` in source files; defaults to `1`.
 - `STYLE_ENFORCE_TEST_FILE_NAMES`: set to `0` to disable test file naming checks; defaults to `1`.
 - `STYLE_ENFORCE_SOURCE_TEST_PAIRS`: set to `0` to allow concrete source files without matching `*_tests.rs` files; defaults to `1`.

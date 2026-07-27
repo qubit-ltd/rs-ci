@@ -85,7 +85,7 @@ class CiCheckScriptTests(unittest.TestCase):
     ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
         return self.run_format_block(
             CI_CHECK_SCRIPT,
-            'if cargo +"$RS_CI_FMT_TOOLCHAIN" fmt -- --check',
+            'if cargo +"$RS_CI_FMT_TOOLCHAIN" fmt --all -- --check',
             '\necho ""\n\nprint_step "2/15',
             has_fuzz_manifest=has_fuzz_manifest,
             fail_fuzz_format=fail_fuzz_format,
@@ -99,7 +99,7 @@ class CiCheckScriptTests(unittest.TestCase):
     ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
         return self.run_format_block(
             ALIGN_CI_SCRIPT,
-            'echo "==> cargo +$RS_CI_FMT_TOOLCHAIN fmt -- --config-path',
+            'echo "==> cargo +$RS_CI_FMT_TOOLCHAIN fmt --all -- --config-path',
             '\necho "==> cargo +$RS_CI_CLIPPY_TOOLCHAIN clippy --fix',
             has_fuzz_manifest=has_fuzz_manifest,
             fail_fuzz_format=fail_fuzz_format,
@@ -117,6 +117,8 @@ class CiCheckScriptTests(unittest.TestCase):
         self.assertEqual(0, align_result.returncode, align_result.stderr)
         self.assertEqual(1, len(ci_commands), ci_commands)
         self.assertEqual(1, len(align_commands), align_commands)
+        self.assertIn("|--all|", ci_commands[0])
+        self.assertIn("|--all|", align_commands[0])
 
     def test_format_scripts_include_fuzz_manifest_when_fuzz_disabled(
         self,
