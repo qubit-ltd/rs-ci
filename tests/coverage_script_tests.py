@@ -578,6 +578,42 @@ class WorkspaceCoverageScriptTests(unittest.TestCase):
                 self.assertIn("--exclude qubit-workspace-xtask", command)
             self.assertIn("derive/generated/schema.rs", result.stdout)
 
+    def test_config_exempts_exact_files_from_thresholds(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, fake_bin, _, metadata_path, coverage_path = (
+                self.create_fixture(tmp)
+            )
+            exempt_file = root / "src" / "bridge.rs"
+            exempt_file.write_text("pub fn bridge() {}\n", encoding="utf-8")
+            write_coverage_fixture(
+                coverage_path,
+                [
+                    coverage_file(root / "src" / "lib.rs"),
+                    coverage_file(exempt_file, percent=50),
+                    coverage_file(root / "derive" / "src" / "lib.rs"),
+                ],
+            )
+            (root / ".rs-ci-coverage.json").write_text(
+                json.dumps(
+                    {
+                        "threshold_exempt_files": {
+                            "qubit-workspace": ["src/bridge.rs"]
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_fixture(
+                root,
+                fake_bin,
+                metadata_path,
+                coverage_path,
+            )
+
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertIn("src/bridge.rs", result.stdout)
+
     def test_environment_scope_overrides_config_scope(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root, fake_bin, log_path, metadata_path, coverage_path = (

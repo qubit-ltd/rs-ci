@@ -126,6 +126,9 @@ artifact。
   "source_dirs": {
     "qubit-redact": ["src"],
     "qubit-redact-derive": ["src"]
+  },
+  "threshold_exempt_files": {
+    "qubit-redact": ["src/bridge.rs"]
   }
 }
 ```
@@ -136,6 +139,10 @@ artifact。
 的 package 配置一个或多个相对源码目录；未配置的 package 使用
 `COVERAGE_SOURCE_DIR`，默认是 `src`。未知配置键、未知 package、重复项、绝对
 路径或包含 `..` 的路径都会在收集覆盖率前明确失败。
+
+`threshold_exempt_files` 可按 package 列出精确的相对源码文件：这些文件仍会出现在
+覆盖率报告中，但跳过单文件阈值检查。它只应用于已审查的工具链或插桩限制，不能用于
+隐藏未测试行为。
 
 收集阶段使用 Cargo workspace 选择参数（`--workspace` 加排除项），让所选 package
 共享一次测试运行。只生成报告时改用重复的 `--package` 参数，因为

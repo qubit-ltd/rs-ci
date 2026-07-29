@@ -132,6 +132,9 @@ default scope is Cargo's `workspace_default_members`; use
   "source_dirs": {
     "qubit-redact": ["src"],
     "qubit-redact-derive": ["src"]
+  },
+  "threshold_exempt_files": {
+    "qubit-redact": ["src/bridge.rs"]
   }
 }
 ```
@@ -144,6 +147,11 @@ package-relative source roots for selected packages; unspecified packages use
 `COVERAGE_SOURCE_DIR`, which defaults to `src`. Invalid keys, unknown package
 names, duplicate entries, absolute paths, and paths containing `..` fail before
 coverage collection.
+
+`threshold_exempt_files` optionally lists exact package-relative source files
+that remain in coverage reports but are skipped by per-source threshold checks.
+Use it only for reviewed toolchain or instrumentation limitations; do not use it
+to hide untested behavior.
 
 Collection uses Cargo workspace selection (`--workspace` plus exclusions) so
 the selected packages share one test run. Report-only commands use repeated
