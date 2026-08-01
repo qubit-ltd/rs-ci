@@ -191,10 +191,12 @@ if [ "${RS_CI_CARGO_HOME_MODE:-project}" = "project" ]; then
 fi
 echo ""
 
-print_step "1/15 Checking code format (cargo +$RS_CI_FMT_TOOLCHAIN fmt --all -- --check --config-path $RUSTFMT_CONFIG)"
+print_step "1/15 Checking code format (cargo +$RS_CI_FMT_TOOLCHAIN fmt --manifest-path $PROJECT_ROOT/Cargo.toml -- --check --config-path $RUSTFMT_CONFIG)"
 ensure_lint_toolchains
 print_rs_ci_lint_versions
-if cargo +"$RS_CI_FMT_TOOLCHAIN" fmt --all -- --check --config-path "$RUSTFMT_CONFIG" > /dev/null 2>&1; then
+if cargo +"$RS_CI_FMT_TOOLCHAIN" fmt \
+    --manifest-path "$PROJECT_ROOT/Cargo.toml" \
+    -- --check --config-path "$RUSTFMT_CONFIG" > /dev/null 2>&1; then
     print_success "Code format check passed"
 else
     print_error "Code format check failed"
