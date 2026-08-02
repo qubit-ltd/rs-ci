@@ -9,6 +9,7 @@
 - `align-ci.sh`：本地自动修复脚本，用于格式化代码并运行 clippy。
 - `ci-check.sh`：本地完整 CI 等价检查脚本。
 - `cargo-env.sh`：本地入口脚本共用的 Cargo 环境设置。
+- `cargo-lock-update.sh`：同步根项目及支持的辅助 Cargo.lock 文件。
 - `update-submodule.sh`：本地 submodule 同步脚本，默认从远程跟踪分支更新 submodule。
 - `cargo-feature-check.sh`：可选的项目声明式 Cargo feature matrix 运行器。
 - `cargo-fuzz-check.sh`：按条件运行的 cargo-fuzz 构建与限时 smoke 测试脚本。
@@ -30,7 +31,7 @@
 把这些文件复制到 Rust 项目根目录：
 
 ```bash
-command cp align-ci.sh ci-check.sh cargo-env.sh toolchains.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh rs-ci-metadata.sh cargo-miri-check.sh cargo-sanitizer-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
+command cp align-ci.sh ci-check.sh cargo-env.sh cargo-lock-update.sh toolchains.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh rs-ci-metadata.sh cargo-miri-check.sh cargo-sanitizer-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
 command cp .circleci/config.yml <project-root>/.circleci/config.yml
 ```
 
@@ -38,7 +39,7 @@ command cp .circleci/config.yml <project-root>/.circleci/config.yml
 
 ```bash
 cd <project-root>
-chmod +x align-ci.sh ci-check.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh rs-ci-metadata.sh cargo-miri-check.sh cargo-sanitizer-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh
+chmod +x align-ci.sh ci-check.sh cargo-lock-update.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh rs-ci-metadata.sh cargo-miri-check.sh cargo-sanitizer-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh
 ./style-check.sh
 ./ci-check.sh
 ```
@@ -126,6 +127,9 @@ artifact。
   "source_dirs": {
     "qubit-redact": ["src"],
     "qubit-redact-derive": ["src"]
+  },
+  "threshold_exempt_files": {
+    "qubit-redact": ["src/bridge.rs"]
   }
 }
 ```
@@ -136,6 +140,10 @@ artifact。
 的 package 配置一个或多个相对源码目录；未配置的 package 使用
 `COVERAGE_SOURCE_DIR`，默认是 `src`。未知配置键、未知 package、重复项、绝对
 路径或包含 `..` 的路径都会在收集覆盖率前明确失败。
+
+`threshold_exempt_files` 可按 package 列出精确的相对源码文件：这些文件仍会出现在
+覆盖率报告中，但跳过单文件阈值检查。它只应用于已审查的工具链或插桩限制，不能用于
+隐藏未测试行为。
 
 收集阶段使用 Cargo workspace 选择参数（`--workspace` 加排除项），让所选 package
 共享一次测试运行。只生成报告时改用重复的 `--package` 参数，因为
@@ -180,20 +188,35 @@ cargo install cargo-fuzz
 `RS_CI_FUZZ_MODE=disabled` 则显式跳过检查及其工具准备。hosted smoke 检查只在 Linux 上运行；
 更长时间的 fuzz campaign 应单独配置，不应放进常规 CI workflow。
 
+## Cargo lock 文件同步
+
+`align-ci.sh` 和 `ci-check.sh` 会在其他检查之前运行
+`cargo-lock-update.sh`。该脚本会校验项目根目录的 `Cargo.lock`，以及存在时的
+约定辅助项目 `fuzz/Cargo.toml`、`loom/Cargo.toml`，并处理
+`RS_CI_AUXILIARY_MANIFESTS` 中逐行列出的其他 manifest。缺失或过期的 lock 文件会
+通过 `cargo generate-lockfile` 自动重新生成，因此独立的 fuzz 或辅助 crate 不会与
+manifest 漂移，而 Loom package 仍由 workspace 根 lock 文件统一管理。
+
+不希望修改工作区的自动化可以使用只读的 `./cargo-lock-update.sh --check`；默认的
+`--update` 模式用于本地对齐。
+
 ## 条件化 Loom 模型检查
 
 `ci-check.sh`、可复用 GitHub Actions workflow 和 CircleCI 模板会为每个声明
-`loom` 依赖（通常位于 `[dev-dependencies]`）的 workspace package 运行 Loom
-模型测试。没有这类 package 的项目会输出跳过信息，也不会安装额外的 Rust 工具链。
+`loom` 依赖（位于 `[dependencies]` 或 `[dev-dependencies]`）的 workspace package
+运行 Loom 模型测试。没有这类 package 的项目会输出跳过信息，也不会安装额外的
+Rust 工具链。
 
 启用后，检查会运行：
 
 ```bash
-RUSTFLAGS="--cfg loom" cargo test --release --all-features
+RUSTFLAGS="--cfg loom" cargo test --release --all-features loom
 ```
 
-`loom` 配置标志会启用 `#[cfg(loom)]` 守卫的测试；release profile 可降低模型探索
-成本。hosted Loom 检查只在 Linux 上运行。
+末尾的 `loom` 过滤条件只选择 Loom 模型测试。`loom` 配置标志会启用
+`#[cfg(loom)]` 守卫的测试；普通测试不能在该配置下运行，因为 Loom 同步原语要求
+处于 `loom::model` 执行上下文中。release profile 可降低模型探索成本。hosted Loom
+检查只在 Linux 上运行。
 
 ## 条件化 Miri 与 Sanitizer 检查
 
@@ -299,6 +322,8 @@ package 选择行为。
 Cargo 命令之前拒绝浮动的 `nightly`，共享默认值统一定义在 `toolchains.sh`。
 
 - `RS_CI_PROJECT_ROOT`：当这些脚本从其他目录运行时，用它指定 Rust 项目根目录。
+- `RS_CI_AUXILIARY_MANIFESTS`：需要同步 lock 文件的其他 Cargo manifest 路径，每行一个。
+- `RS_CI_LOCKFILE_TOOLCHAIN`：lock 文件 metadata 检查和重新生成使用的可选工具链；默认使用 `RS_CI_BUILD_TOOLCHAIN`。
 - `RS_CI_RUSTFMT_CONFIG`：rustfmt 配置路径；默认是运行中的 CI 脚本所在目录旁的 `rustfmt.toml`。
 - `RS_CI_CARGO_MATRIX_CONFIG`：可选 Cargo feature matrix 配置文件的项目相对路径；默认是 `.rs-ci-cargo-matrix.json`。
 - `RS_CI_CARGO_HOME_MODE`：本地脚本使用的 Cargo 缓存模式，可选 `project` 或 `shared`；默认是 `project`，避免多个 `rs-*` 仓库并行检查时共享 Cargo package cache 和 index 锁。设为 `shared` 可以保留 Cargo 默认的全局缓存行为。

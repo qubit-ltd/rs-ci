@@ -60,6 +60,15 @@ ensure_lint_toolchains() {
     fi
 }
 
+ensure_executable_file() {
+    local file="$1"
+
+    if [ ! -f "$file" ] || [ ! -x "$file" ]; then
+        echo "error: required executable '$file' was not found" >&2
+        exit 1
+    fi
+}
+
 RUSTFMT_CONFIG="${RS_CI_RUSTFMT_CONFIG:-$SCRIPT_DIR/rustfmt.toml}"
 PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
 
@@ -87,8 +96,14 @@ fi
 ensure_lint_toolchains
 print_rs_ci_lint_versions
 
-echo "==> cargo +$RS_CI_FMT_TOOLCHAIN fmt --all -- --config-path $RUSTFMT_CONFIG"
-cargo +"$RS_CI_FMT_TOOLCHAIN" fmt --all -- --config-path "$RUSTFMT_CONFIG"
+ensure_executable_file "$SCRIPT_DIR/cargo-lock-update.sh"
+echo "==> synchronizing Cargo.lock files"
+RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/cargo-lock-update.sh"
+
+echo "==> cargo +$RS_CI_FMT_TOOLCHAIN fmt --manifest-path $PROJECT_ROOT/Cargo.toml -- --config-path $RUSTFMT_CONFIG"
+cargo +"$RS_CI_FMT_TOOLCHAIN" fmt \
+    --manifest-path "$PROJECT_ROOT/Cargo.toml" \
+    -- --config-path "$RUSTFMT_CONFIG"
 if [ -f "$PROJECT_ROOT/fuzz/Cargo.toml" ]; then
     echo "==> cargo +$RS_CI_FMT_TOOLCHAIN fmt --manifest-path $PROJECT_ROOT/fuzz/Cargo.toml -- --config-path $RUSTFMT_CONFIG"
     cargo +"$RS_CI_FMT_TOOLCHAIN" fmt \
