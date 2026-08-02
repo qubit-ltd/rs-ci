@@ -17,7 +17,8 @@
 - `rs-ci-metadata.sh`：读取 package 级 CI opt-in 的共享 Cargo metadata 脚本。
 - `cargo-miri-check.sh`：按条件运行的 Miri 测试脚本。
 - `cargo-sanitizer-check.sh`：按条件运行的 sanitizer 测试脚本。
-- `cargo-package-check.sh`：对每个可发布 Cargo workspace member 运行带 `--allow-dirty` 的打包验证。
+- `cargo-package-check.sh`：使用一次带 `--allow-dirty` 的 Cargo 调用共同打包所有可发布
+  workspace member，从而保留 Cargo 的 workspace 依赖暂存机制。
 - `readme-version-check.py`：检查所有 workspace package README 的依赖片段是否匹配 Cargo 解析后的 `major.minor` 版本。
 - `style-check.sh`：检查 Cargo workspace default members 中 rustfmt 和 clippy 不覆盖的 Rust 源码布局约束。
 - `coverage.sh`：本地覆盖率报告生成和阈值检查脚本。

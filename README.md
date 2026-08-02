@@ -17,7 +17,9 @@ Shared scripts and CircleCI/GitHub Actions configuration for checking Rust code 
 - `rs-ci-metadata.sh`: shared Cargo metadata reader for package-scoped CI opt-ins.
 - `cargo-miri-check.sh`: conditional Miri test runner.
 - `cargo-sanitizer-check.sh`: conditional sanitizer test runner.
-- `cargo-package-check.sh`: packages every publishable Cargo workspace member with `--allow-dirty`.
+- `cargo-package-check.sh`: packages all publishable Cargo workspace members
+  together with `--allow-dirty`, preserving Cargo's workspace dependency
+  staging.
 - `readme-version-check.py`: checks dependency snippets in every workspace package README against Cargo-resolved `major.minor` versions.
 - `style-check.sh`: Rust source layout checks for Cargo workspace default members that rustfmt and clippy do not cover.
 - `coverage.sh`: local coverage report generator and threshold checker.
