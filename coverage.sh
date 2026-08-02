@@ -259,6 +259,7 @@ check_json_coverage() {
         --argjson min_functions "$MIN_FUNCTION_COVERAGE" \
         --argjson min_lines "$MIN_LINE_COVERAGE" \
         --argjson min_regions "$MIN_REGION_COVERAGE" \
+        --argjson exempt_files "$THRESHOLD_EXEMPT_FILES_JSON" \
         '
         .data[].files[] as $file
         | (
@@ -273,6 +274,7 @@ check_json_coverage() {
             | last
           ) as $source_root
         | select($source_root != null)
+        | select(($exempt_files | index($file.filename)) == null)
         | $file.summary as $summary
         | select(
             (($summary.functions.count > 0) and ($summary.functions.percent < $min_functions))
@@ -376,7 +378,7 @@ build_coverage_plan() {
           end
         | (
             ($config_value | keys_unsorted)
-            - ["scope", "exclude_packages", "source_dirs"]
+            - ["scope", "exclude_packages", "source_dirs", "threshold_exempt_files"]
           ) as $unknown_keys
         | if ($unknown_keys | length) > 0 then
               fail("unknown key(s): " + ($unknown_keys | join(", ")))
@@ -404,6 +406,13 @@ build_coverage_plan() {
           else
               .
           end
+        | if ($config_value | has("threshold_exempt_files"))
+             and (($config_value.threshold_exempt_files | type) != "object")
+          then
+              fail("threshold_exempt_files must be an object")
+          else
+              .
+          end
         | ($config_value.exclude_packages // []) as $exclude_names
         | if ($exclude_names | all(type == "string" and length > 0) | not) then
               fail("exclude_packages must contain non-empty strings")
@@ -416,6 +425,7 @@ build_coverage_plan() {
               .
           end
         | ($config_value.source_dirs // {}) as $source_dirs
+        | ($config_value.threshold_exempt_files // {}) as $threshold_exempt_files
         | if (
               $source_dirs
               | to_entries
@@ -423,6 +433,36 @@ build_coverage_plan() {
               | not
           ) then
               fail("each source_dirs value must be an array")
+          else
+              .
+          end
+        | if (
+              $threshold_exempt_files
+              | to_entries
+              | all((.value | type) == "array")
+              | not
+          ) then
+              fail("each threshold_exempt_files value must be an array")
+          else
+              .
+          end
+        | if (
+              $threshold_exempt_files
+              | to_entries
+              | all(.value | all(type == "string" and length > 0))
+              | not
+          ) then
+              fail("threshold_exempt_files must contain non-empty strings")
+          else
+              .
+          end
+        | if (
+              $threshold_exempt_files
+              | to_entries
+              | all((.value | unique | length) == (.value | length))
+              | not
+          ) then
+              fail("threshold_exempt_files arrays must not contain duplicates")
           else
               .
           end
@@ -506,6 +546,23 @@ build_coverage_plan() {
               .
           end
         | (
+            [
+                ($threshold_exempt_files | keys[]?) as $threshold_package
+                | select(
+                    ($workspace_names | index($threshold_package)) == null
+                )
+                | $threshold_package
+            ]
+          ) as $unknown_threshold_packages
+        | if ($unknown_threshold_packages | length) > 0 then
+              fail(
+                  "threshold_exempt_files names unknown package(s): "
+                  + ($unknown_threshold_packages | join(", "))
+              )
+          else
+              .
+          end
+        | (
             if $scope_override != "" then
                 $scope_override
             else
@@ -579,11 +636,31 @@ build_coverage_plan() {
               .
           end
         | (
+            [
+                ($threshold_exempt_files | keys[]?) as $threshold_package
+                | select(
+                    ($selected_names | index($threshold_package)) == null
+                )
+                | $threshold_package
+            ]
+          ) as $unselected_threshold_packages
+        | if ($unselected_threshold_packages | length) > 0 then
+              fail(
+                  "threshold_exempt_files refers to unselected package(s): "
+                  + ($unselected_threshold_packages | join(", "))
+              )
+          else
+              .
+          end
+        | (
             $selected_packages
             | map(
                 . + {
                     source_dirs: (
                         $source_dirs[.name] // [$default_source_dir]
+                    ),
+                    threshold_exempt_files: (
+                        $threshold_exempt_files[.name] // []
                     )
                 }
             )
@@ -596,6 +673,19 @@ build_coverage_plan() {
               | length
           ) > 0 then
               fail("source directories must be relative paths without '..'")
+          else
+              .
+          end
+        | if (
+              [
+                  $packages_with_sources[].threshold_exempt_files[]
+                  | select(valid_source_path | not)
+              ]
+              | length
+          ) > 0 then
+              fail(
+                  "threshold exemption files must be relative paths without '..'"
+              )
           else
               .
           end
@@ -705,6 +795,44 @@ build_source_roots() {
     )
 }
 
+build_threshold_exempt_files() {
+    local plan_path="$1"
+    local manifest_path
+    local relative_path
+    local package_dir
+    local next_exempt_files
+
+    THRESHOLD_EXEMPT_FILES_JSON="[]"
+    while IFS=$'\t' read -r manifest_path relative_path; do
+        package_dir=$(dirname "$manifest_path")
+        if [ ! -f "$package_dir/$relative_path" ]; then
+            echo "error: coverage threshold exemption file not found: $relative_path" >&2
+            exit 1
+        fi
+        if ! next_exempt_files=$(jq -c \
+            --arg file "$package_dir/$relative_path" \
+            '
+            if index($file) == null then
+                . + [$file]
+            else
+                .
+            end
+            ' <<< "$THRESHOLD_EXEMPT_FILES_JSON"); then
+            echo "error: unable to build coverage threshold exemptions" >&2
+            exit 1
+        fi
+        THRESHOLD_EXEMPT_FILES_JSON="$next_exempt_files"
+    done < <(
+        jq -r '
+            .packages[]
+            | .manifest_path as $manifest_path
+            | .threshold_exempt_files[]?
+            | [$manifest_path, .]
+            | @tsv
+        ' "$plan_path"
+    )
+}
+
 CLEAN_FLAG=""
 FORMAT_ARG=""
 for arg in "$@"; do
@@ -801,6 +929,7 @@ mapfile -t CARGO_REPORT_ARGS < <(jq -r '.report_args[]' "$PLAN_PATH")
 mapfile -t SELECTED_PACKAGES < <(jq -r '.packages[].name' "$PLAN_PATH")
 mapfile -t EXCLUDED_PACKAGES < <(jq -r '.excluded_packages[]' "$PLAN_PATH")
 build_source_roots "$PLAN_PATH"
+build_threshold_exempt_files "$PLAN_PATH"
 
 EXCLUDE_PATTERN=$(build_exclude_pattern)
 
@@ -813,6 +942,10 @@ fi
 echo "Cargo toolchain: $RS_CI_BUILD_TOOLCHAIN"
 echo "Coverage source roots:"
 jq -r '.[] | "  - \(.display_prefix) [\(.package)]"' <<< "$SOURCE_ROOTS_JSON"
+if [ "$THRESHOLD_EXEMPT_FILES_JSON" != "[]" ]; then
+    echo "Coverage threshold-exempt files:"
+    jq -r '.[] | "  - " + .' <<< "$THRESHOLD_EXEMPT_FILES_JSON"
+fi
 echo "Exclude pattern: $EXCLUDE_PATTERN"
 if [ "$COVERAGE_ALL_FEATURES" = "1" ]; then
     echo "Cargo features: --all-features"

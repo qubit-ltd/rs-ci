@@ -101,7 +101,7 @@ class CargoPackageCheckTests(unittest.TestCase):
             self.assertEqual(result.returncode, 17)
             self.assertIn("Cargo package verification failed", result.stderr)
 
-    def test_packages_each_publishable_workspace_member(self) -> None:
+    def test_packages_publishable_workspace_members_together(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "project"
             root.mkdir()
@@ -123,9 +123,11 @@ class CargoPackageCheckTests(unittest.TestCase):
 
             commands = log_path.read_text(encoding="utf-8").splitlines()
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertEqual(2, len(commands))
-        self.assertIn("--package runtime --allow-dirty", commands[0])
-        self.assertIn("--package runtime-derive --allow-dirty", commands[1])
+        self.assertEqual(1, len(commands))
+        self.assertIn("--package runtime", commands[0])
+        self.assertIn("--package runtime-derive", commands[0])
+        self.assertNotIn("--package fixtures", commands[0])
+        self.assertTrue(commands[0].endswith("--allow-dirty"))
 
 
 if __name__ == "__main__":
