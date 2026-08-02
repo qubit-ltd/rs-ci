@@ -40,15 +40,18 @@ if [ "${#packages[@]}" -eq 0 ]; then
     exit 0
 fi
 
+package_args=()
 for package in "${packages[@]}"; do
-    if cargo +"$RS_CI_BUILD_TOOLCHAIN" package \
-        --package "$package" \
-        --allow-dirty; then
-        continue
-    else
-        status=$?
-        echo "Cargo package verification failed for $package." >&2
-        exit "$status"
-    fi
+    package_args+=(--package "$package")
 done
+
+if cargo +"$RS_CI_BUILD_TOOLCHAIN" package \
+    "${package_args[@]}" \
+    --allow-dirty; then
+    :
+else
+    status=$?
+    echo "Cargo package verification failed for selected workspace packages." >&2
+    exit "$status"
+fi
 echo "Cargo package verification passed for ${#packages[@]} workspace package(s)."
