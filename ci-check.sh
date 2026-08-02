@@ -191,6 +191,11 @@ if [ "${RS_CI_CARGO_HOME_MODE:-project}" = "project" ]; then
 fi
 echo ""
 
+print_step "Synchronizing Cargo.lock files"
+require_executable_file "$SCRIPT_DIR/cargo-lock-update.sh"
+RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/cargo-lock-update.sh"
+echo ""
+
 print_step "1/15 Checking code format (cargo +$RS_CI_FMT_TOOLCHAIN fmt --manifest-path $PROJECT_ROOT/Cargo.toml -- --check --config-path $RUSTFMT_CONFIG)"
 ensure_lint_toolchains
 print_rs_ci_lint_versions

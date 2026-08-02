@@ -9,6 +9,7 @@ Shared scripts and CircleCI/GitHub Actions configuration for checking Rust code 
 - `align-ci.sh`: local auto-fix script for formatting and clippy.
 - `ci-check.sh`: local full CI parity check.
 - `cargo-env.sh`: shared Cargo environment setup used by local entry scripts.
+- `cargo-lock-update.sh`: synchronizes the root and supported auxiliary Cargo.lock files.
 - `update-submodule.sh`: local submodule sync script that updates submodules from remote tracking branches by default.
 - `cargo-feature-check.sh`: optional project-declared Cargo feature matrix runner.
 - `cargo-fuzz-check.sh`: conditional cargo-fuzz build and bounded smoke-test runner.
@@ -30,7 +31,7 @@ Shared scripts and CircleCI/GitHub Actions configuration for checking Rust code 
 Copy these files into the root of a Rust project:
 
 ```bash
-command cp align-ci.sh ci-check.sh cargo-env.sh toolchains.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh rs-ci-metadata.sh cargo-miri-check.sh cargo-sanitizer-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
+command cp align-ci.sh ci-check.sh cargo-env.sh cargo-lock-update.sh toolchains.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh rs-ci-metadata.sh cargo-miri-check.sh cargo-sanitizer-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
 command cp .circleci/config.yml <project-root>/.circleci/config.yml
 ```
 
@@ -38,7 +39,7 @@ Then run:
 
 ```bash
 cd <project-root>
-chmod +x align-ci.sh ci-check.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh rs-ci-metadata.sh cargo-miri-check.sh cargo-sanitizer-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh
+chmod +x align-ci.sh ci-check.sh cargo-lock-update.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh rs-ci-metadata.sh cargo-miri-check.sh cargo-sanitizer-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh
 ./style-check.sh
 ./ci-check.sh
 ```
@@ -202,6 +203,20 @@ cargo install cargo-fuzz
 on Linux only; longer fuzzing campaigns should be configured separately from
 the normal CI workflow.
 
+## Cargo Lockfile Synchronization
+
+`align-ci.sh` and `ci-check.sh` run `cargo-lock-update.sh` before their other
+checks. The helper validates the project-root `Cargo.lock`, the conventional
+`fuzz/Cargo.toml` and `loom/Cargo.toml` auxiliary projects when present, and
+any additional manifests listed in `RS_CI_AUXILIARY_MANIFESTS` (one path per
+line). Missing or stale lockfiles are regenerated with
+`cargo generate-lockfile`, so independent fuzz or helper crates cannot drift
+from their manifests while the workspace lockfile remains the source of truth
+for Loom packages.
+
+Use `./cargo-lock-update.sh --check` in read-only automation when mutation is
+not desired; the default `--update` mode is intended for local alignment.
+
 ## Conditional Loom Model Checks
 
 `ci-check.sh`, the reusable GitHub Actions workflow, and the CircleCI template
@@ -335,6 +350,8 @@ All nightly overrides must use the `nightly-YYYY-MM-DD` form. Floating
 are defined in `toolchains.sh`.
 
 - `RS_CI_PROJECT_ROOT`: Rust project root used when these scripts are run from another directory.
+- `RS_CI_AUXILIARY_MANIFESTS`: additional Cargo manifest paths, one per line, whose lockfiles should be synchronized.
+- `RS_CI_LOCKFILE_TOOLCHAIN`: optional toolchain override for lockfile metadata and regeneration; defaults to `RS_CI_BUILD_TOOLCHAIN`.
 - `RS_CI_RUSTFMT_CONFIG`: rustfmt configuration path; defaults to `rustfmt.toml` beside the running CI script.
 - `RS_CI_CARGO_MATRIX_CONFIG`: project-relative path to the optional Cargo feature matrix config; defaults to `.rs-ci-cargo-matrix.json`.
 - `RS_CI_CARGO_HOME_MODE`: Cargo cache mode for local scripts, either `project` or `shared`; defaults to `project` so parallel `rs-*` checks do not share Cargo package cache and index locks. Set it to `shared` to keep Cargo's normal global cache behavior.
