@@ -72,9 +72,11 @@ add_manifest() {
     local existing
 
     [ -f "$manifest" ] || die "Cargo manifest '$manifest' was not found"
-    for existing in "${MANIFESTS[@]}"; do
-        [ "$existing" != "$manifest" ] || return
-    done
+    if [ "${#MANIFESTS[@]}" -gt 0 ]; then
+        for existing in "${MANIFESTS[@]}"; do
+            [ "$existing" != "$manifest" ] || return
+        done
+    fi
     MANIFESTS+=("$manifest")
 }
 

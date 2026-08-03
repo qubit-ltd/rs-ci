@@ -12,6 +12,15 @@ LOCK_UPDATE = REPO_ROOT / "cargo-lock-update.sh"
 
 
 class CargoLockUpdateTests(unittest.TestCase):
+    def test_manifest_deduplication_guards_empty_array_for_bash_nounset(self) -> None:
+        script = LOCK_UPDATE.read_text(encoding="utf-8")
+        loop = 'for existing in "${MANIFESTS[@]}"; do'
+
+        self.assertIn(loop, script)
+        loop_start = script.index(loop)
+        guard = 'if [ "${#MANIFESTS[@]}" -gt 0 ]; then'
+        self.assertIn(guard, script[max(0, loop_start - 160) : loop_start])
+
     def run_helper(
         self,
         *,
