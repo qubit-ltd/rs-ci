@@ -178,9 +178,17 @@ jobs:
           fi
 
   miri:
-    name: Conditional Miri checks
+    name: Conditional Miri checks (${{ matrix.platform }})
     if: ${{ github.event_name != 'schedule' }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            runner: ubuntu-latest
+          - platform: macos
+            runner: macos-14
     needs:
       - fast_checks
       - resolve_toolchains
@@ -267,9 +275,17 @@ jobs:
         run: echo "Miri is not configured; skipping."
 
   sanitizers:
-    name: Conditional sanitizer checks
+    name: Conditional sanitizer checks (${{ matrix.platform }})
     if: ${{ github.event_name != 'schedule' }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            runner: ubuntu-latest
+          - platform: macos
+            runner: macos-14
     needs:
       - fast_checks
       - resolve_toolchains

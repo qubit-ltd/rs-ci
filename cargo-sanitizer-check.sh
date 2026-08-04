@@ -77,10 +77,21 @@ fi
 
 HOST_SYSTEM=$(uname -s)
 HOST_MACHINE=$(uname -m)
-if [ "$HOST_SYSTEM" != "Linux" ] || [ "$HOST_MACHINE" != "x86_64" ]; then
-    echo "error: AddressSanitizer checks require a Linux x86_64 host" >&2
-    exit 2
-fi
+case "$HOST_SYSTEM:$HOST_MACHINE" in
+    Linux:x86_64)
+        SANITIZER_TARGET="x86_64-unknown-linux-gnu"
+        ;;
+    Darwin:arm64)
+        SANITIZER_TARGET="aarch64-apple-darwin"
+        ;;
+    Darwin:x86_64)
+        SANITIZER_TARGET="x86_64-apple-darwin"
+        ;;
+    *)
+        echo "AddressSanitizer is not supported on ${HOST_SYSTEM} ${HOST_MACHINE}; skipping."
+        exit 0
+        ;;
+esac
 
 SANITIZER_RUSTFLAGS="${RUSTFLAGS:-}"
 SANITIZER_RUSTDOCFLAGS="${RUSTDOCFLAGS:-}"
@@ -95,12 +106,12 @@ SANITIZER_RUSTDOCFLAGS+="-Zsanitizer=address"
 
 cd "$PROJECT_ROOT"
 for package in "${PACKAGES[@]}"; do
-    echo "Running AddressSanitizer for package '$package'"
+    echo "Running AddressSanitizer for package '$package' on $SANITIZER_TARGET"
     RUSTFLAGS="$SANITIZER_RUSTFLAGS" \
         RUSTDOCFLAGS="$SANITIZER_RUSTDOCFLAGS" \
         cargo +"$RS_CI_SANITIZER_TOOLCHAIN" test \
         -Zbuild-std \
-        --target x86_64-unknown-linux-gnu \
+        --target "$SANITIZER_TARGET" \
         --all-features \
         --package "$package"
 done
