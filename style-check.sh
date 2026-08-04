@@ -35,7 +35,7 @@ STYLE_TEST_SUPPORT_DIR_REGEX="${STYLE_TEST_SUPPORT_DIR_REGEX:-(^|/)(support|comm
 
 FAILURES=0
 
-script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 source "$script_dir/style/common.sh"
 source "$script_dir/style/rules/tests.sh"
 source "$script_dir/style/rules/types.sh"
@@ -171,7 +171,8 @@ main() {
     require_command wc
 
     PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$script_dir}"
-    PROJECT_ROOT=$(cd "$PROJECT_ROOT" && pwd)
+    # Resolve symlinks so paths from cargo metadata and find share one root.
+    PROJECT_ROOT=$(cd "$PROJECT_ROOT" && pwd -P)
     if [ -z "$STYLE_ALLOWLIST_FILE" ]; then
         STYLE_ALLOWLIST_FILE="$PROJECT_ROOT/.qubit-style-allowlist"
     fi
