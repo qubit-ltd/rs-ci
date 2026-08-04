@@ -121,7 +121,10 @@ require_cargo_fuzz
 cd "$PROJECT_ROOT"
 
 targets_output=$(cargo +"$RS_CI_FUZZ_TOOLCHAIN" fuzz list)
-mapfile -t targets < <(printf '%s\n' "$targets_output" | awk 'NF')
+targets=()
+while IFS= read -r target; do
+    targets+=("$target")
+done < <(printf '%s\n' "$targets_output" | awk 'NF')
 if [ "${#targets[@]}" -eq 0 ]; then
     die "cargo-fuzz is configured but reported no fuzz targets"
 fi

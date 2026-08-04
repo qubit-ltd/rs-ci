@@ -922,12 +922,22 @@ build_coverage_plan "$METADATA_PATH" "$CONFIG_PATH" "$PLAN_PATH"
 COVERAGE_SCOPE_RESOLVED=$(jq -r '.scope' "$PLAN_PATH")
 WORKSPACE_ROOT=$(jq -r '.workspace_root' "$PLAN_PATH")
 WORKSPACE_ROOT=$(cd "$WORKSPACE_ROOT" && pwd -P)
-mapfile -t CARGO_COLLECTION_ARGS < <(
-    jq -r '.collection_args[]' "$PLAN_PATH"
-)
-mapfile -t CARGO_REPORT_ARGS < <(jq -r '.report_args[]' "$PLAN_PATH")
-mapfile -t SELECTED_PACKAGES < <(jq -r '.packages[].name' "$PLAN_PATH")
-mapfile -t EXCLUDED_PACKAGES < <(jq -r '.excluded_packages[]' "$PLAN_PATH")
+CARGO_COLLECTION_ARGS=()
+while IFS= read -r arg; do
+    CARGO_COLLECTION_ARGS+=("$arg")
+done < <(jq -r '.collection_args[]' "$PLAN_PATH")
+CARGO_REPORT_ARGS=()
+while IFS= read -r arg; do
+    CARGO_REPORT_ARGS+=("$arg")
+done < <(jq -r '.report_args[]' "$PLAN_PATH")
+SELECTED_PACKAGES=()
+while IFS= read -r package; do
+    SELECTED_PACKAGES+=("$package")
+done < <(jq -r '.packages[].name' "$PLAN_PATH")
+EXCLUDED_PACKAGES=()
+while IFS= read -r package; do
+    EXCLUDED_PACKAGES+=("$package")
+done < <(jq -r '.excluded_packages[]' "$PLAN_PATH")
 build_source_roots "$PLAN_PATH"
 build_threshold_exempt_files "$PLAN_PATH"
 

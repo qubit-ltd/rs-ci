@@ -24,7 +24,10 @@ if ! command -v jq > /dev/null 2>&1; then
 fi
 
 metadata=$(cargo +"$RS_CI_BUILD_TOOLCHAIN" metadata --no-deps --format-version 1)
-mapfile -t packages < <(
+packages=()
+while IFS= read -r package; do
+    [ -n "$package" ] && packages+=("$package")
+done < <(
     jq -r '
         . as $metadata
         | .workspace_members[] as $member_id

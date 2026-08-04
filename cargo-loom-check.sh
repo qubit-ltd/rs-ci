@@ -33,7 +33,10 @@ load_loom_packages() {
     fi
     cd "$PROJECT_ROOT"
     metadata=$(cargo +"$RS_CI_BUILD_TOOLCHAIN" metadata --no-deps --format-version 1)
-    mapfile -t LOOM_PACKAGES < <(
+    LOOM_PACKAGES=()
+    while IFS= read -r package; do
+        [ -n "$package" ] && LOOM_PACKAGES+=("$package")
+    done < <(
         jq -r '
             . as $metadata
             | .workspace_members[] as $member_id
