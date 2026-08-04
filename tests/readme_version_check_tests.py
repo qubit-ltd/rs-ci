@@ -20,6 +20,8 @@ def write_project(
     readme: str | None = None,
     readme_zh: str | None = None,
 ) -> None:
+    (root / "src").mkdir()
+    (root / "src" / "lib.rs").write_text("", encoding="utf-8")
     (root / "Cargo.toml").write_text(
         textwrap.dedent(
             f"""\
@@ -117,7 +119,55 @@ class ReadmeVersionCheckTests(unittest.TestCase):
 
             result = run_checker(root)
 
-            self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_checks_workspace_packages_with_inherited_versions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "Cargo.toml").write_text(
+                textwrap.dedent(
+                    """\
+                    [workspace]
+                    members = ["runtime", "derive"]
+                    resolver = "3"
+
+                    [workspace.package]
+                    version = "2.4.1"
+                    edition = "2024"
+                    """
+                ),
+                encoding="utf-8",
+            )
+            for package_dir, package_name in (
+                ("runtime", "qubit-runtime"),
+                ("derive", "qubit-runtime-derive"),
+            ):
+                member = root / package_dir
+                (member / "src").mkdir(parents=True)
+                (member / "src" / "lib.rs").write_text("", encoding="utf-8")
+                (member / "Cargo.toml").write_text(
+                    textwrap.dedent(
+                        f"""\
+                        [package]
+                        name = "{package_name}"
+                        version.workspace = true
+                        edition.workspace = true
+                        readme = "README.md"
+                        """
+                    ),
+                    encoding="utf-8",
+                )
+                (member / "README.md").write_text(
+                    'qubit-runtime = "2.4"\n'
+                    'qubit-runtime-derive = "2.4.1"\n',
+                    encoding="utf-8",
+                )
+
+            result = run_checker(root)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("derive/README.md", result.stderr)
+        self.assertIn('expected "2.4"', result.stderr)
 
 
 if __name__ == "__main__":

@@ -16,10 +16,13 @@
 
 set -euo pipefail
 
-RUST_TOOLCHAIN="${RUST_TOOLCHAIN:-nightly}"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=toolchains.sh
+source "$SCRIPT_DIR/toolchains.sh"
+configure_rs_ci_toolchains
+
 CONFIG_FILE_NAME="${RS_CI_CARGO_MATRIX_CONFIG:-.rs-ci-cargo-matrix.json}"
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 if [ -n "${RS_CI_PROJECT_ROOT:-}" ]; then
     PROJECT_ROOT="$RS_CI_PROJECT_ROOT"
 elif [ "$(basename "$SCRIPT_DIR")" = ".rs-ci" ]; then
@@ -38,7 +41,8 @@ print_usage() {
     echo "Usage: ./cargo-feature-check.sh [run-all|run-index <index>|github-matrix|validate|help]"
     echo ""
     echo "Environment:"
-    echo "  RUST_TOOLCHAIN=${RUST_TOOLCHAIN}"
+    echo "  RS_CI_BUILD_TOOLCHAIN=${RS_CI_BUILD_TOOLCHAIN}"
+    echo "  RS_CI_CLIPPY_TOOLCHAIN=${RS_CI_CLIPPY_TOOLCHAIN}"
     echo "  RS_CI_PROJECT_ROOT=${PROJECT_ROOT}"
     echo "  RS_CI_CARGO_MATRIX_CONFIG=${CONFIG_FILE_NAME}"
 }
@@ -72,6 +76,9 @@ validate_config() {
             and (.name | type == "string" and test("^[A-Za-z0-9][A-Za-z0-9._-]*$"))
             and ((.commands // []) | type == "array" and length > 0 and all(.[]; type == "string" and allowed_command))
             and ((.features // []) | type == "array" and all(.[]; type == "string" and test("^[A-Za-z0-9_+./-]+$") and (contains(",") | not)))
+            and ((.packages // []) | type == "array" and all(.[]; type == "string" and test("^[A-Za-z0-9][A-Za-z0-9_-]*$")))
+            and ((.packages // []) | length == (unique | length))
+            and ((has("packages") | not) or (.packages | length > 0))
             and ((if has("defaultFeatures") then .defaultFeatures else true end) | type == "boolean")
             and ((if has("allFeatures") then .allFeatures else false end) | type == "boolean")
             and (
@@ -110,12 +117,17 @@ build_feature_args() {
     local all_features
     local default_features
     local features
+    local package
 
     all_features=$(jq -r --argjson index "$index" '.checks[$index] | if has("allFeatures") then .allFeatures else false end' "$CONFIG_FILE")
     default_features=$(jq -r --argjson index "$index" '.checks[$index] | if has("defaultFeatures") then .defaultFeatures else true end' "$CONFIG_FILE")
     features=$(jq -r --argjson index "$index" '(.checks[$index].features // []) | join(",")' "$CONFIG_FILE")
 
     FEATURE_ARGS=()
+    PACKAGE_ARGS=()
+    while IFS= read -r package; do
+        [ -n "$package" ] && PACKAGE_ARGS+=(--package "$package")
+    done < <(jq -r --argjson index "$index" '.checks[$index].packages[]?' "$CONFIG_FILE")
     if [ "$all_features" = "true" ]; then
         FEATURE_ARGS+=(--all-features)
     else
@@ -149,22 +161,22 @@ run_cargo_command() {
 
     case "$command" in
         check)
-            cargo check "${FEATURE_ARGS[@]}" --verbose
+            cargo +"$RS_CI_BUILD_TOOLCHAIN" check "${PACKAGE_ARGS[@]}" "${FEATURE_ARGS[@]}" --verbose
             ;;
         build)
-            cargo build "${FEATURE_ARGS[@]}" --verbose
+            cargo +"$RS_CI_BUILD_TOOLCHAIN" build "${PACKAGE_ARGS[@]}" "${FEATURE_ARGS[@]}" --verbose
             ;;
         test)
-            cargo test "${FEATURE_ARGS[@]}" --verbose
+            cargo +"$RS_CI_BUILD_TOOLCHAIN" test "${PACKAGE_ARGS[@]}" "${FEATURE_ARGS[@]}" --verbose
             ;;
         doc)
-            RUSTDOCFLAGS="-D warnings" cargo doc --no-deps "${FEATURE_ARGS[@]}" --verbose
+            RUSTDOCFLAGS="-D warnings" cargo +"$RS_CI_BUILD_TOOLCHAIN" doc --no-deps "${PACKAGE_ARGS[@]}" "${FEATURE_ARGS[@]}" --verbose
             ;;
         doc-test)
-            cargo test --doc "${FEATURE_ARGS[@]}" --verbose
+            cargo +"$RS_CI_BUILD_TOOLCHAIN" test --doc "${PACKAGE_ARGS[@]}" "${FEATURE_ARGS[@]}" --verbose
             ;;
         clippy)
-            cargo +"$RUST_TOOLCHAIN" clippy --all-targets "${FEATURE_ARGS[@]}" -- -D warnings
+            cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets "${PACKAGE_ARGS[@]}" "${FEATURE_ARGS[@]}" -- -D warnings
             ;;
         *)
             echo "error: unsupported command '$command'" >&2
@@ -192,7 +204,11 @@ run_check_index() {
         commands+=("$command")
     done < <(jq -r --argjson index "$index" '.checks[$index].commands[]' "$CONFIG_FILE")
     for command in "${commands[@]}"; do
-        echo "==> cargo $command ${FEATURE_ARGS[*]}"
+        if [ "$command" = "clippy" ]; then
+            echo "==> cargo +$RS_CI_CLIPPY_TOOLCHAIN $command ${FEATURE_ARGS[*]}"
+        else
+            echo "==> cargo +$RS_CI_BUILD_TOOLCHAIN $command ${FEATURE_ARGS[*]}"
+        fi
         run_cargo_command "$command"
     done
 }

@@ -14,7 +14,11 @@
 
 set -euo pipefail
 
-RUST_TOOLCHAIN="${RUST_TOOLCHAIN:-nightly}"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=toolchains.sh
+source "$SCRIPT_DIR/toolchains.sh"
+configure_rs_ci_toolchains
+
 RUN_COVERAGE_CFG_CLIPPY="${RUN_COVERAGE_CFG_CLIPPY:-0}"
 RUN_COVERAGE_IN_ALIGN="${RUN_COVERAGE_IN_ALIGN:-0}"
 
@@ -25,29 +29,56 @@ require_command() {
     fi
 }
 
-ensure_toolchain_components() {
-    if ! rustup toolchain list | grep -q "^${RUST_TOOLCHAIN}"; then
-        echo "==> installing Rust toolchain: $RUST_TOOLCHAIN"
-        rustup toolchain install "$RUST_TOOLCHAIN"
+ensure_toolchain() {
+    local toolchain="$1"
+    shift
+
+    if ! rustup toolchain list | grep -q "^${toolchain}" || ! cargo +"$toolchain" --version > /dev/null 2>&1; then
+        echo "==> installing Rust toolchain: $toolchain"
+        rustup toolchain install "$toolchain" --profile minimal
     fi
 
-    if [ "${RS_CI_SKIP_TOOLCHAIN_UPDATE:-0}" != "1" ]; then
-        echo "==> updating Rust toolchain: $RUST_TOOLCHAIN (align with CI)"
-        if ! rustup toolchain update "$RUST_TOOLCHAIN"; then
+    if [ "${RS_CI_UPDATE_TOOLCHAINS:-0}" = "1" ]; then
+        echo "==> updating Rust toolchain: $toolchain"
+        if ! rustup toolchain update "$toolchain"; then
             echo "warning: rustup toolchain update failed; continuing with installed toolchain" >&2
         fi
     fi
 
-    echo "==> ensuring rustfmt and clippy components for $RUST_TOOLCHAIN"
-    rustup component add rustfmt clippy --toolchain "$RUST_TOOLCHAIN"
+    if [ "$#" -gt 0 ]; then
+        echo "==> ensuring components for $toolchain: $*"
+        rustup component add "$@" --toolchain "$toolchain"
+    fi
 }
+
+ensure_lint_toolchains() {
+    ensure_toolchain "$RS_CI_FMT_TOOLCHAIN" rustfmt
+    if [ "$RS_CI_CLIPPY_TOOLCHAIN" = "$RS_CI_FMT_TOOLCHAIN" ]; then
+        rustup component add clippy --toolchain "$RS_CI_CLIPPY_TOOLCHAIN"
+    else
+        ensure_toolchain "$RS_CI_CLIPPY_TOOLCHAIN" clippy
+    fi
+}
+
+ensure_executable_file() {
+    local file="$1"
+
+    if [ ! -f "$file" ] || [ ! -x "$file" ]; then
+        echo "error: required executable '$file' was not found" >&2
+        exit 1
+    fi
+}
+
+RUSTFMT_CONFIG="${RS_CI_RUSTFMT_CONFIG:-$SCRIPT_DIR/rustfmt.toml}"
+PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
+
+# shellcheck source=cargo-env.sh
+source "$SCRIPT_DIR/cargo-env.sh"
+configure_rs_ci_cargo_home "$PROJECT_ROOT"
 
 require_command cargo
 require_command rustup
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-RUSTFMT_CONFIG="${RS_CI_RUSTFMT_CONFIG:-$SCRIPT_DIR/rustfmt.toml}"
-PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
 cd "$PROJECT_ROOT"
 
 if [ ! -f "$RUSTFMT_CONFIG" ]; then
@@ -55,25 +86,46 @@ if [ ! -f "$RUSTFMT_CONFIG" ]; then
     exit 1
 fi
 
-ensure_toolchain_components
+echo "Build toolchain: $RS_CI_BUILD_TOOLCHAIN"
+echo "Rustfmt toolchain: $RS_CI_FMT_TOOLCHAIN"
+echo "Clippy toolchain: $RS_CI_CLIPPY_TOOLCHAIN"
+if [ "${RS_CI_CARGO_HOME_MODE:-project}" = "project" ]; then
+    echo "Cargo home: $CARGO_HOME"
+fi
 
-echo "==> cargo +$RUST_TOOLCHAIN fmt -- --config-path $RUSTFMT_CONFIG"
-cargo +"$RUST_TOOLCHAIN" fmt -- --config-path "$RUSTFMT_CONFIG"
+ensure_lint_toolchains
+print_rs_ci_lint_versions
 
-echo "==> cargo +$RUST_TOOLCHAIN clippy --fix (all targets / features)"
-cargo +"$RUST_TOOLCHAIN" clippy --fix --allow-dirty --allow-staged --all-targets --all-features
+ensure_executable_file "$SCRIPT_DIR/cargo-lock-update.sh"
+echo "==> synchronizing Cargo.lock files"
+RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/cargo-lock-update.sh"
 
-echo "==> cargo +$RUST_TOOLCHAIN clippy (verify, -D warnings)"
-cargo +"$RUST_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
+echo "==> cargo +$RS_CI_FMT_TOOLCHAIN fmt --manifest-path $PROJECT_ROOT/Cargo.toml -- --config-path $RUSTFMT_CONFIG"
+cargo +"$RS_CI_FMT_TOOLCHAIN" fmt \
+    --manifest-path "$PROJECT_ROOT/Cargo.toml" \
+    -- --config-path "$RUSTFMT_CONFIG"
+if [ -f "$PROJECT_ROOT/fuzz/Cargo.toml" ]; then
+    echo "==> cargo +$RS_CI_FMT_TOOLCHAIN fmt --manifest-path $PROJECT_ROOT/fuzz/Cargo.toml -- --config-path $RUSTFMT_CONFIG"
+    cargo +"$RS_CI_FMT_TOOLCHAIN" fmt \
+        --manifest-path "$PROJECT_ROOT/fuzz/Cargo.toml" \
+        -- --config-path "$RUSTFMT_CONFIG"
+fi
+
+echo "==> cargo +$RS_CI_CLIPPY_TOOLCHAIN clippy --fix (all targets / features)"
+cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --fix --allow-dirty --allow-staged --all-targets --all-features
+
+echo "==> cargo +$RS_CI_CLIPPY_TOOLCHAIN clippy (verify, -D warnings)"
+cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
 
 if [ "$RUN_COVERAGE_CFG_CLIPPY" = "1" ]; then
-    echo "==> RUSTFLAGS=--cfg coverage cargo +$RUST_TOOLCHAIN clippy"
-    RUSTFLAGS="--cfg coverage" cargo +"$RUST_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
+    echo "==> RUSTFLAGS=--cfg coverage cargo +$RS_CI_CLIPPY_TOOLCHAIN clippy"
+    RUSTFLAGS="--cfg coverage" cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
 fi
 
 if [ "$RUN_COVERAGE_IN_ALIGN" = "1" ]; then
     require_command cargo-llvm-cov
     require_command jq
+    ensure_toolchain "$RS_CI_BUILD_TOOLCHAIN" llvm-tools-preview
 
     echo "==> ./coverage.sh json"
     RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/coverage.sh" json

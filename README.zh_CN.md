@@ -8,11 +8,19 @@
 
 - `align-ci.sh`：本地自动修复脚本，用于格式化代码并运行 clippy。
 - `ci-check.sh`：本地完整 CI 等价检查脚本。
+- `cargo-env.sh`：本地入口脚本共用的 Cargo 环境设置。
+- `cargo-lock-update.sh`：同步根项目及支持的辅助 Cargo.lock 文件。
 - `update-submodule.sh`：本地 submodule 同步脚本，默认从远程跟踪分支更新 submodule。
 - `cargo-feature-check.sh`：可选的项目声明式 Cargo feature matrix 运行器。
-- `cargo-package-check.sh`：运行 `cargo package --allow-dirty` 的本地打包验证脚本。
-- `readme-version-check.py`：README 依赖片段检查脚本，要求当前 crate 使用 `major.minor` 版本。
-- `style-check.sh`：检查 rustfmt 和 clippy 不覆盖的 Rust 源码布局约束。
+- `cargo-fuzz-check.sh`：按条件运行的 cargo-fuzz 构建与限时 smoke 测试脚本。
+- `cargo-loom-check.sh`：按条件运行的 Loom 模型测试脚本。
+- `rs-ci-metadata.sh`：读取 package 级 CI opt-in 的共享 Cargo metadata 脚本。
+- `cargo-miri-check.sh`：按条件运行的 Miri 测试脚本。
+- `cargo-sanitizer-check.sh`：按条件运行的 sanitizer 测试脚本。
+- `cargo-package-check.sh`：使用一次带 `--allow-dirty` 的 Cargo 调用共同打包所有可发布
+  workspace member，从而保留 Cargo 的 workspace 依赖暂存机制。
+- `readme-version-check.py`：检查所有 workspace package README 的依赖片段是否匹配 Cargo 解析后的 `major.minor` 版本。
+- `style-check.sh`：检查 Cargo workspace default members 中 rustfmt 和 clippy 不覆盖的 Rust 源码布局约束。
 - `coverage.sh`：本地覆盖率报告生成和阈值检查脚本。
 - `page/`：可复用的 GitHub Pages 构建器、模板、样式和默认配置。
 - `rustfmt.toml`：本地脚本和 CI 使用的共享 rustfmt 配置。
@@ -24,7 +32,7 @@
 把这些文件复制到 Rust 项目根目录：
 
 ```bash
-command cp align-ci.sh ci-check.sh update-submodule.sh cargo-feature-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
+command cp align-ci.sh ci-check.sh cargo-env.sh cargo-lock-update.sh toolchains.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh rs-ci-metadata.sh cargo-miri-check.sh cargo-sanitizer-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
 command cp .circleci/config.yml <project-root>/.circleci/config.yml
 ```
 
@@ -32,7 +40,7 @@ command cp .circleci/config.yml <project-root>/.circleci/config.yml
 
 ```bash
 cd <project-root>
-chmod +x align-ci.sh ci-check.sh update-submodule.sh cargo-feature-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh
+chmod +x align-ci.sh ci-check.sh cargo-lock-update.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh rs-ci-metadata.sh cargo-miri-check.sh cargo-sanitizer-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh
 ./style-check.sh
 ./ci-check.sh
 ```
@@ -64,6 +72,18 @@ jobs:
 YAML
 ```
 
+可复用 workflow 提供布尔输入 `run_windows_tests` 和 `run_macos_tests`，两者的
+默认值均为 `false`。只有包含平台专用代码路径的 crate 才需要显式启用：
+
+```yaml
+jobs:
+  rust-ci:
+    uses: qubit-ltd/rs-ci/.github/workflows/rust-ci.yml@main
+    with:
+      run_windows_tests: true
+      run_macos_tests: true
+```
+
 在 Rust 项目的 README 中加入 CI 和 coverage badge：
 
 ```markdown
@@ -74,11 +94,12 @@ YAML
 ## GitHub Actions 覆盖率输出
 
 可复用 workflow 保留现有格式化、clippy、debug build、doc test、README 依赖版本、
-test、release build、文档、打包验证、审计和 Windows 检查。覆盖率通过 `coverage.sh all` 生成，工具是
-`cargo-llvm-cov`，由 `taiki-e/install-action` 安装。CI 中设置
-`COVERAGE_ENFORCE_THRESHOLDS=0`，初始接入阶段只报告覆盖率，不因阈值失败。
-覆盖率发布只使用 GitHub Actions summary、comment 和 artifact，不需要 Codecov 或
-Coveralls token。
+test、release build、文档、打包验证、审计，以及可选的 Windows 和 macOS 检查。覆盖率通过 `coverage.sh all` 生成，工具是
+`cargo-llvm-cov`，由 `taiki-e/install-action` 安装。可复用 workflow 的
+`coverage_enforce_thresholds` 默认值为 `"0"`，初始接入阶段只报告覆盖率，不因
+阈值失败；调用方可设为 `"1"`，启用与本地 `coverage.sh` 相同的单源码阈值。
+覆盖率发布只使用 GitHub Actions summary、comment 和 artifact，不需要 Codecov
+或 Coveralls token。
 
 调用方 workflow 使用 `push`、`pull_request` 或 `workflow_dispatch` 触发时，
 coverage job 会写出 `lcov.info`、`target/llvm-cov/html` 下的 HTML 报告、
@@ -92,6 +113,146 @@ artifact，comment 步骤不会阻塞 CI。
 workflow 不会自动提交生成的覆盖率文件。默认分支 `push` 会构建 Pages 站点，并通过
 GitHub Pages Actions 部署。pull request 和非默认分支只上传 `pages-preview`
 artifact。
+
+## Workspace 覆盖率
+
+`coverage.sh` 通过 `cargo metadata` 解析项目，因此一个 workspace 可以在一次
+运行中收集并检查多个成员 package。默认范围是 Cargo 的
+`workspace_default_members`；需要其他选择时，在项目根目录添加
+`.rs-ci-coverage.json`：
+
+```json
+{
+  "scope": "workspace",
+  "exclude_packages": ["integration-fixtures"],
+  "source_dirs": {
+    "qubit-redact": ["src"],
+    "qubit-redact-derive": ["src"]
+  },
+  "threshold_exempt_files": {
+    "qubit-redact": ["src/bridge.rs"]
+  }
+}
+```
+
+`scope` 可选 `default-members`、`workspace` 或 `package`。`package` 选择项目根
+`Cargo.toml` 对应的 package，因此不能用于虚拟 workspace 根。
+`exclude_packages` 使用准确的 workspace package 名称。`source_dirs` 可为已选择
+的 package 配置一个或多个相对源码目录；未配置的 package 使用
+`COVERAGE_SOURCE_DIR`，默认是 `src`。未知配置键、未知 package、重复项、绝对
+路径或包含 `..` 的路径都会在收集覆盖率前明确失败。
+
+`threshold_exempt_files` 可按 package 列出精确的相对源码文件：这些文件仍会出现在
+覆盖率报告中，但跳过单文件阈值检查。它只应用于已审查的工具链或插桩限制，不能用于
+隐藏未测试行为。
+
+收集阶段使用 Cargo workspace 选择参数（`--workspace` 加排除项），让所选 package
+共享一次测试运行。只生成报告时改用重复的 `--package` 参数，因为
+`cargo llvm-cov report` 不接受 `--workspace`。两条路径来自同一份 metadata
+package 计划；阈值检查会按最长匹配规则把每个报告文件归入配置的源码根目录。
+
+调用方 workflow 可以这样启用严格覆盖率：
+
+```yaml
+jobs:
+  rust-ci:
+    uses: qubit-ltd/rs-ci/.github/workflows/rust-ci.yml@main
+    with:
+      coverage_enforce_thresholds: "1"
+```
+
+## 条件化 cargo-fuzz 检查
+
+`ci-check.sh`、可复用 GitHub Actions workflow 和 CircleCI 模板只会在
+`fuzz/Cargo.toml` 的 `[package.metadata]` 声明 `cargo-fuzz = true` 时自动启用
+cargo-fuzz。没有这个标准标记的项目会输出跳过信息，也不需要 nightly 工具链或
+`cargo-fuzz` 可执行程序。
+
+Rustfmt 覆盖与 cargo-fuzz 是否执行相互独立。只要存在 `fuzz/Cargo.toml`，
+`ci-check.sh`、`align-ci.sh`、可复用 GitHub Actions workflow 和 CircleCI 模板
+就会额外检查或格式化该 crate；即使 `RS_CI_FUZZ_MODE=disabled` 或未声明
+cargo-fuzz 元数据标记也不会跳过格式检查。
+
+默认的 `RS_CI_FUZZ_MODE=smoke` 会构建 `cargo fuzz list` 报告的每个 target，并让
+每个 target 运行 `RS_CI_FUZZ_SECONDS_PER_TARGET=10` 秒，同时把最大输入长度限制为
+`RS_CI_FUZZ_MAX_LEN=4096` 字节。smoke 运行使用临时可写
+corpus；已提交的 `fuzz/corpus/<target>` 目录只作为 seed 输入。崩溃产物保留在
+`fuzz/artifacts/`，hosted CI 失败时会上传该目录。
+
+启用了 cargo-fuzz 的项目，在运行 `ci-check.sh` 前需要先安装本地工具：
+
+```bash
+cargo install cargo-fuzz
+```
+
+`RS_CI_FUZZ_MODE=build-only` 只编译 target 而不执行 libFuzzer，
+`RS_CI_FUZZ_MODE=disabled` 则显式跳过检查及其工具准备。hosted smoke 检查只在 Linux 上运行；
+更长时间的 fuzz campaign 应单独配置，不应放进常规 CI workflow。
+
+## Cargo lock 文件同步
+
+`align-ci.sh` 和 `ci-check.sh` 会在其他检查之前运行
+`cargo-lock-update.sh`。该脚本会校验项目根目录的 `Cargo.lock`，以及存在时的
+约定辅助项目 `fuzz/Cargo.toml`、`loom/Cargo.toml`，并处理
+`RS_CI_AUXILIARY_MANIFESTS` 中逐行列出的其他 manifest。缺失或过期的 lock 文件会
+通过 `cargo generate-lockfile` 自动重新生成，因此独立的 fuzz 或辅助 crate 不会与
+manifest 漂移，而 Loom package 仍由 workspace 根 lock 文件统一管理。
+
+不希望修改工作区的自动化可以使用只读的 `./cargo-lock-update.sh --check`；默认的
+`--update` 模式用于本地对齐。
+
+## 条件化 Loom 模型检查
+
+`ci-check.sh`、可复用 GitHub Actions workflow 和 CircleCI 模板会为每个声明
+`loom` 依赖（位于 `[dependencies]` 或 `[dev-dependencies]`）的 workspace package
+运行 Loom 模型测试。没有这类 package 的项目会输出跳过信息，也不会安装额外的
+Rust 工具链。
+
+启用后，检查会运行：
+
+```bash
+RUSTFLAGS="--cfg loom" cargo test --release --all-features loom
+```
+
+末尾的 `loom` 过滤条件只选择 Loom 模型测试。`loom` 配置标志会启用
+`#[cfg(loom)]` 守卫的测试；普通测试不能在该配置下运行，因为 Loom 同步原语要求
+处于 `loom::model` 执行上下文中。release profile 可降低模型探索成本。hosted Loom
+检查只在 Linux 上运行。
+
+## 条件化 Miri 与 Sanitizer 检查
+
+package 通过 Cargo metadata 显式启用检查。没有这些字段的项目会跳过两项检查，
+且不会安装额外的 nightly 工具链：
+
+```toml
+[package.metadata.rs-ci]
+miri = true
+sanitizers = ["address"]
+```
+
+配置以 package 为粒度。在 workspace 中，只有声明 `miri = true` 的 package 才会
+由 Miri 执行；只有把 `"address"` 加入列表的 package 才会运行
+AddressSanitizer。字段类型错误、重复项和不支持的 sanitizer 名称都会被视为配置
+错误，而不是静默跳过。
+
+`ci-check.sh` 和可复用 GitHub workflow 会调用同一组 checker 脚本。GitHub
+workflow 提供 `miri_toolchain` 和 `sanitizer_toolchain` 输入，并把两项检查放入
+独立的 conditional job，避免一项结果遮蔽另一项。本次不向 CircleCI 模板加入这
+两项检查。
+在 rs-ci 滚动升级期间，尚未包含新 checker 脚本的调用方仍会跳过未声明的检查；
+如果调用方已经 opt-in、却未更新 `.rs-ci` 子模块，workflow 会明确要求更新，
+不会静默漏掉已请求的检查。
+
+Miri 会对每个 opt-in package 运行 all-feature 测试。切换本地工具链后，如果
+Miri sysroot 或构建缓存出现不一致，可以运行：
+
+```bash
+cargo +"$RS_CI_MIRI_TOOLCHAIN" miri clean
+```
+
+AddressSanitizer 当前只支持 `x86_64-unknown-linux-gnu` CI 路径，使用固定日期的
+nightly、`rust-src`、`-Zsanitizer=address` 和 `-Zbuild-std`。已经 opt-in 的
+项目在其他本地主机上会明确失败，不会把未执行的检查报告为成功。
 
 ## Cargo Feature Matrix
 
@@ -127,6 +288,10 @@ Cargo 默认 feature 选择，不额外检查其他 feature 组合。
 `allFeatures` 设为 `true` 来显式声明 all-features 检查。matrix 由项目声明，
 `rs-ci` 不会尝试从 `Cargo.toml` 自动推断所有有效 feature 组合。
 
+Workspace 检查可以通过非空 `packages` 列表指定准确的 Cargo package 名称。
+运行器会把每个选择转换为 `--package`；省略 `packages` 时保留 Cargo 的默认
+package 选择行为。
+
 ## GitHub Pages 站点
 
 把仓库 Pages source 设为 **GitHub Actions**。默认分支 `push` 部署会发布：
@@ -143,17 +308,34 @@ Cargo 默认 feature 选择，不额外检查其他 feature 组合。
 
 ## 可调环境变量
 
-- `RUST_TOOLCHAIN`：`fmt` 和 `clippy` 使用的工具链；默认是 `nightly`。
+- `RS_CI_BUILD_TOOLCHAIN`：build、test、docs、package、coverage 和 audit 检查使用的工具链；默认是 `1.94.0`。
+- `RS_CI_FMT_TOOLCHAIN`：`rustfmt` 使用的工具链；默认是 `nightly-2026-06-05`。
+- `RS_CI_CLIPPY_TOOLCHAIN`：`clippy` 使用的工具链；默认是 `nightly-2026-06-05`。
+- `RS_CI_FUZZ_TOOLCHAIN`：`cargo-fuzz` 使用的 nightly 工具链；默认是 `nightly-2026-06-05`。
+- `RS_CI_MIRI_TOOLCHAIN`：Miri 使用的 nightly 工具链；默认是 `nightly-2026-06-05`。
+- `RS_CI_SANITIZER_TOOLCHAIN`：sanitizer 使用的 nightly 工具链；默认是 `nightly-2026-06-05`。
+- `RS_CI_FUZZ_MODE`：cargo-fuzz 检查模式，可选 `smoke`（默认）、`build-only` 或 `disabled`。
+- `RS_CI_FUZZ_SECONDS_PER_TARGET`：每个 fuzz target 的正整数 smoke 时长（秒）；默认是 `10`。
+- `RS_CI_FUZZ_MAX_LEN`：libFuzzer 输入的正整数最大字节数；默认是 `4096`。
+- `RS_CI_UPDATE_TOOLCHAINS`：设为 `1` 时运行 `rustup toolchain update`；默认只安装缺失的工具链，不更新已安装工具链。
+
+所有 nightly 覆盖值都必须使用 `nightly-YYYY-MM-DD` 格式。脚本会在运行
+Cargo 命令之前拒绝浮动的 `nightly`，共享默认值统一定义在 `toolchains.sh`。
+
 - `RS_CI_PROJECT_ROOT`：当这些脚本从其他目录运行时，用它指定 Rust 项目根目录。
+- `RS_CI_AUXILIARY_MANIFESTS`：需要同步 lock 文件的其他 Cargo manifest 路径，每行一个。
+- `RS_CI_LOCKFILE_TOOLCHAIN`：lock 文件 metadata 检查和重新生成使用的可选工具链；默认使用 `RS_CI_BUILD_TOOLCHAIN`。
 - `RS_CI_RUSTFMT_CONFIG`：rustfmt 配置路径；默认是运行中的 CI 脚本所在目录旁的 `rustfmt.toml`。
 - `RS_CI_CARGO_MATRIX_CONFIG`：可选 Cargo feature matrix 配置文件的项目相对路径；默认是 `.rs-ci-cargo-matrix.json`。
+- `RS_CI_CARGO_HOME_MODE`：本地脚本使用的 Cargo 缓存模式，可选 `project` 或 `shared`；默认是 `project`，避免多个 `rs-*` 仓库并行检查时共享 Cargo package cache 和 index 锁。设为 `shared` 可以保留 Cargo 默认的全局缓存行为。
+- `RS_CI_CARGO_HOME_ROOT`：当 `RS_CI_CARGO_HOME_MODE=project` 时，per-project Cargo home 的根目录；默认是 `$XDG_CACHE_HOME/rs-ci/cargo-home` 或 `$HOME/.cache/rs-ci/cargo-home`。
 - `RUN_COVERAGE_CFG_CLIPPY`：设为 `1` 时，使用 `RUSTFLAGS="--cfg coverage"` 运行 clippy。
 - `RUN_COVERAGE_IN_ALIGN`：设为 `1` 时，从 `align-ci.sh` 运行 `coverage.sh json`；默认是 `0`。
-- `STYLE_SOURCE_DIR`：`style-check.sh` 检查的源码目录；默认是 `src`。
-- `STYLE_TEST_DIR`：`style-check.sh` 检查的测试目录；默认是 `tests`。
+- `STYLE_SOURCE_DIR`：`style-check.sh` 显式检查的源码目录；设置后进入兼容的单目录模式。
+- `STYLE_TEST_DIR`：`style-check.sh` 显式检查的测试目录；设置后进入兼容的单目录模式。两者均未设置时，对 Cargo workspace default members 使用各 package 内的 `src` 与 `tests` 目录。
 - `STYLE_ENFORCE_INLINE_TESTS`：设为 `0` 时允许在源码文件中使用 `#[cfg(test)]` 或 `#[test]`；默认是 `1`。
 - `STYLE_ENFORCE_TEST_FILE_NAMES`：设为 `0` 时关闭测试文件命名检查；默认是 `1`。
-- `STYLE_ENFORCE_SOURCE_TEST_PAIRS`：设为 `1` 时要求每个具体源码文件都有对应的 `*_tests.rs` 文件；默认是 `0`，因为覆盖率阈值才是测试行为的主要约束。
+- `STYLE_ENFORCE_SOURCE_TEST_PAIRS`：设为 `0` 时允许具体源码文件没有对应的 `*_tests.rs` 文件；默认是 `1`。
 - `STYLE_ENFORCE_PUBLIC_TYPE_FILES`：设为 `0` 时关闭公开类型文件布局检查；默认是 `1`。
 - `STYLE_ENFORCE_EXPLICIT_IMPORTS`：设为 `0` 时允许通配导入和纯聚合型 `mod.rs` 中的私有导入；默认是 `1`。
 - `STYLE_ENFORCE_AGGREGATION_FILES`：设为 `0` 时允许 `lib.rs` 和 `mod.rs` 定义结构体、trait、函数、impl 或宏等具体条目；默认是 `1`。
@@ -162,6 +344,8 @@ Cargo 默认 feature 选择，不额外检查其他 feature 组合。
 - `STYLE_EXTRA_EXCLUDE_REGEX`：追加给 `style-check.sh` 的文件排除正则。
 - `STYLE_ALLOWLIST_FILE`：项目级已审核风格例外白名单；默认是 `<project-root>/.qubit-style-allowlist`。
 - `COVERAGE_ENFORCE_THRESHOLDS`：设为 `0` 时禁用单源码文件覆盖率阈值检查；默认是 `1`。
+- `COVERAGE_SCOPE`：覆盖配置文件中的范围，可选 `default-members`、`workspace` 或 `package`。
+- `RS_CI_COVERAGE_CONFIG`：可选 coverage 配置的项目相对或绝对路径；默认是 `.rs-ci-coverage.json`。
 - `COVERAGE_ALL_FEATURES`：设为 `0` 时，coverage 使用 Cargo 默认 feature 选择；默认是 `1`。
 - `COVERAGE_NO_DEFAULT_FEATURES`：与 `COVERAGE_ALL_FEATURES=0` 配合使用，设为 `1` 时 coverage 禁用默认 feature。
 - `COVERAGE_FEATURES`：当 `COVERAGE_ALL_FEATURES=0` 时传给 coverage 的逗号分隔 feature 列表。

@@ -14,13 +14,44 @@
 
 set -euo pipefail
 
+RS_CI_BUILD_TOOLCHAIN="${RS_CI_BUILD_TOOLCHAIN:-1.94.0}"
 PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$(pwd)}"
 cd "$PROJECT_ROOT"
 
-if cargo package --allow-dirty; then
-    echo "Cargo package verification passed."
+if ! command -v jq > /dev/null 2>&1; then
+    echo "error: required command 'jq' was not found" >&2
+    exit 1
+fi
+
+metadata=$(cargo +"$RS_CI_BUILD_TOOLCHAIN" metadata --no-deps --format-version 1)
+mapfile -t packages < <(
+    jq -r '
+        . as $metadata
+        | .workspace_members[] as $member_id
+        | .packages[]
+        | select(.id == $member_id)
+        | select((.publish == null) or (.publish | length > 0))
+        | .name
+    ' <<< "$metadata"
+)
+
+if [ "${#packages[@]}" -eq 0 ]; then
+    echo "No publishable workspace packages found; skipping Cargo package verification."
+    exit 0
+fi
+
+package_args=()
+for package in "${packages[@]}"; do
+    package_args+=(--package "$package")
+done
+
+if cargo +"$RS_CI_BUILD_TOOLCHAIN" package \
+    "${package_args[@]}" \
+    --allow-dirty; then
+    :
 else
     status=$?
-    echo "Cargo package verification failed." >&2
+    echo "Cargo package verification failed for selected workspace packages." >&2
     exit "$status"
 fi
+echo "Cargo package verification passed for ${#packages[@]} workspace package(s)."

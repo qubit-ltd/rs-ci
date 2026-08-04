@@ -118,6 +118,9 @@ check_test_redirects() {
         rel_path="${file#$PROJECT_ROOT/}"
         is_extra_excluded "$rel_path" && continue
         [[ "$rel_path" =~ $STYLE_TEST_SUPPORT_DIR_REGEX ]] && continue
+        if [ -n "$(scan_test_attributes "$file")" ]; then
+            continue
+        fi
 
         while IFS= read -r hit; do
             [ -n "$hit" ] || continue
@@ -159,6 +162,31 @@ is_type_alias_only_file() {
             exit (has_type_alias && !has_non_alias_item) ? 0 : 1
         }
     ' "$file"
+}
+
+# Purpose: Check whether an ancestor module has a corresponding integration test.
+has_parent_module_test() {
+    local src_rel_path="$1"
+    local source_root="$2"
+    local test_root="$3"
+    local ancestor="${src_rel_path%/*}"
+    local module_path
+    local module_name
+    local test_file
+
+    while [[ "$ancestor" == */* ]]; do
+        ancestor="${ancestor%/*}"
+        module_path="$source_root/$ancestor.rs"
+        module_name=$(basename "$ancestor")
+        if [ -f "$module_path" ]; then
+            while IFS= read -r test_file; do
+                if [ "$(basename "$test_file")" = "${module_name}_tests.rs" ]; then
+                    return 0
+                fi
+            done < <(list_rs_files "$test_root")
+        fi
+    done
+    return 1
 }
 
 # Purpose: Enforce that each concrete source file has a matching xxx_tests.rs file.
@@ -214,7 +242,10 @@ check_source_test_pairs() {
             fi
         done < <(list_rs_files "$test_root")
         source_sibling_test="${file%.rs}_tests.rs"
-        if [ ! -f "$expected_test_file" ] && [ -z "$matched_test" ] && [ ! -f "$source_sibling_test" ]; then
+        if [ ! -f "$expected_test_file" ] \
+            && [ -z "$matched_test" ] \
+            && [ ! -f "$source_sibling_test" ] \
+            && ! has_parent_module_test "$src_rel_path" "$source_root" "$test_root"; then
             report_error "$rel_path" "0" \
                 "missing corresponding test file '${STYLE_TEST_DIR}/${expected_test_rel}' (or any '${expected_test_name}' under '${STYLE_TEST_DIR}/', or source sibling '${source_sibling_test#$PROJECT_ROOT/}')"
         fi

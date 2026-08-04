@@ -3,26 +3,46 @@ name: Reusable Rust CI
 on:
   workflow_call:
     inputs:
-      rust_toolchain:
-        description: Rust toolchain used for Linux fmt, clippy, build, test, docs, and audit jobs.
-        required: false
-        type: string
-        default: nightly
       run_coverage_cfg_clippy:
         description: Set to 1 to run clippy again with RUSTFLAGS=--cfg coverage.
         required: false
         type: string
         default: "0"
-      cargo_llvm_cov_version:
-        description: cargo-llvm-cov version installed for coverage jobs.
+      coverage_enforce_thresholds:
+        description: Set to 1 to enforce per-source coverage thresholds.
         required: false
         type: string
-        default: "0.6.21"
+        default: "0"
+      cargo_fuzz_mode:
+        description: "Conditional fuzz check mode: smoke, build-only, or disabled."
+        required: false
+        type: string
+        default: smoke
+      cargo_fuzz_seconds_per_target:
+        description: Maximum smoke fuzzing duration per target in seconds.
+        required: false
+        type: string
+        default: "10"
+      cargo_fuzz_max_len:
+        description: Maximum libFuzzer input length in bytes.
+        required: false
+        type: string
+        default: "4096"
       cargo_feature_matrix_config:
         description: Project-relative path to optional Cargo feature matrix config.
         required: false
         type: string
         default: ".rs-ci-cargo-matrix.json"
+      run_windows_tests:
+        description: Run clippy and tests on the pinned Windows runner.
+        required: false
+        type: boolean
+        default: false
+      run_macos_tests:
+        description: Run clippy and tests on the pinned macOS runner.
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -37,16 +57,67 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  RUST_TOOLCHAIN: ${{ inputs.rust_toolchain }}
   RUN_COVERAGE_CFG_CLIPPY: ${{ inputs.run_coverage_cfg_clippy }}
-  CARGO_LLVM_COV_VERSION: ${{ inputs.cargo_llvm_cov_version }}
+  COVERAGE_ENFORCE_THRESHOLDS: ${{ inputs.coverage_enforce_thresholds }}
+  RS_CI_FUZZ_MODE: ${{ inputs.cargo_fuzz_mode }}
+  RS_CI_FUZZ_SECONDS_PER_TARGET: ${{ inputs.cargo_fuzz_seconds_per_target }}
+  RS_CI_FUZZ_MAX_LEN: ${{ inputs.cargo_fuzz_max_len }}
   RS_CI_CARGO_MATRIX_CONFIG: ${{ inputs.cargo_feature_matrix_config }}
 
 jobs:
+  resolve_toolchains:
+    name: Resolve toolchains
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.contract.outputs.build }}
+      fmt: ${{ steps.contract.outputs.fmt }}
+      clippy: ${{ steps.contract.outputs.clippy }}
+      fuzz: ${{ steps.contract.outputs.fuzz }}
+      miri: ${{ steps.contract.outputs.miri }}
+      sanitizer: ${{ steps.contract.outputs.sanitizer }}
+      llvm_cov: ${{ steps.contract.outputs.llvm_cov }}
+      cargo_fuzz: ${{ steps.contract.outputs.cargo_fuzz }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Load toolchain contract
+        id: contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f .rs-ci/toolchains.sh ]; then
+            TOOLCHAIN_CONTRACT=.rs-ci/toolchains.sh
+          else
+            TOOLCHAIN_CONTRACT=toolchains.sh
+          fi
+          source "$TOOLCHAIN_CONTRACT"
+          configure_rs_ci_toolchains
+          {
+            echo "build=$RS_CI_BUILD_TOOLCHAIN"
+            echo "fmt=$RS_CI_FMT_TOOLCHAIN"
+            echo "clippy=$RS_CI_CLIPPY_TOOLCHAIN"
+            echo "fuzz=$RS_CI_FUZZ_TOOLCHAIN"
+            echo "miri=$RS_CI_MIRI_TOOLCHAIN"
+            echo "sanitizer=$RS_CI_SANITIZER_TOOLCHAIN"
+            echo "llvm_cov=$CARGO_LLVM_COV_VERSION"
+            echo "cargo_fuzz=$CARGO_FUZZ_VERSION"
+          } >> "$GITHUB_OUTPUT"
+
   fast_checks:
     name: Fast checks
     if: ${{ github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
+    needs:
+      - resolve_toolchains
+    env:
+      RS_CI_BUILD_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.build }}
+      RS_CI_FMT_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.fmt }}
+      RS_CI_CLIPPY_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.clippy }}
 
     steps:
       - name: Checkout source
@@ -63,16 +134,23 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target
-          key: ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-lint-${{ env.RS_CI_FMT_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
-            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-
+            ${{ runner.os }}-cargo-lint-${{ env.RS_CI_FMT_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
+            ${{ runner.os }}-cargo-lint-${{ env.RS_CI_FMT_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-
 
       - name: Install rustfmt and clippy
         run: |
-          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
-          rustup component add rustfmt clippy --toolchain "$RUST_TOOLCHAIN"
-          rustup default "$RUST_TOOLCHAIN"
+          if [ -f .rs-ci/toolchains.sh ]; then
+            TOOLCHAIN_CONTRACT=.rs-ci/toolchains.sh
+          else
+            TOOLCHAIN_CONTRACT=toolchains.sh
+          fi
+          bash "$TOOLCHAIN_CONTRACT"
+          rustup toolchain install "$RS_CI_FMT_TOOLCHAIN" --profile minimal
+          rustup component add rustfmt --toolchain "$RS_CI_FMT_TOOLCHAIN"
+          rustup toolchain install "$RS_CI_CLIPPY_TOOLCHAIN" --profile minimal
+          rustup component add clippy --toolchain "$RS_CI_CLIPPY_TOOLCHAIN"
 
       - name: Check code format
         run: |
@@ -81,18 +159,336 @@ jobs:
           else
             RUSTFMT_CONFIG=rustfmt.toml
           fi
-          cargo fmt -- --check --config-path "$RUSTFMT_CONFIG"
+          cargo +"$RS_CI_FMT_TOOLCHAIN" fmt --all -- --check --config-path "$RUSTFMT_CONFIG"
+          if [ -f fuzz/Cargo.toml ]; then
+            cargo +"$RS_CI_FMT_TOOLCHAIN" fmt \
+              --manifest-path fuzz/Cargo.toml \
+              -- --check --config-path "$RUSTFMT_CONFIG"
+          fi
 
       - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
 
       - name: Run clippy for coverage cfg when enabled
         run: |
           if [ "$RUN_COVERAGE_CFG_CLIPPY" = "1" ]; then
-            RUSTFLAGS="--cfg coverage" cargo clippy --all-targets --all-features -- -D warnings
+            RUSTFLAGS="--cfg coverage" cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
           else
             echo "RUN_COVERAGE_CFG_CLIPPY is not enabled"
           fi
+
+  miri:
+    name: Conditional Miri checks
+    if: ${{ github.event_name != 'schedule' }}
+    runs-on: ubuntu-latest
+    needs:
+      - fast_checks
+      - resolve_toolchains
+    env:
+      RS_CI_MIRI_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.miri }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Detect Miri configuration
+        id: miri
+        run: |
+          set -euo pipefail
+          if [ -x .rs-ci/cargo-miri-check.sh ]; then
+            CHECKER=.rs-ci/cargo-miri-check.sh
+          elif [ -x ./cargo-miri-check.sh ]; then
+            CHECKER=./cargo-miri-check.sh
+          else
+            MIRI_OPTED_IN=$(
+              cargo metadata --no-deps --format-version 1 |
+                jq -r '
+                  . as $metadata
+                  | any(
+                      $metadata.packages[];
+                      (
+                        .id as $id
+                        | (
+                            $metadata.workspace_members
+                            | index($id)
+                          ) != null
+                      )
+                      and (.metadata["rs-ci"].miri? == true)
+                    )
+                '
+            )
+            if [ "$MIRI_OPTED_IN" = "true" ]; then
+              echo "Miri is configured, but cargo-miri-check.sh was not found" >&2
+              echo "Update the .rs-ci submodule before enabling Miri." >&2
+              exit 1
+            fi
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          set +e
+          RS_CI_PROJECT_ROOT="$PWD" "$CHECKER" --is-configured
+          MIRI_CONFIG_STATUS=$?
+          set -e
+          if [ "$MIRI_CONFIG_STATUS" -eq 0 ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          elif [ "$MIRI_CONFIG_STATUS" -eq 1 ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            exit "$MIRI_CONFIG_STATUS"
+          fi
+
+      - name: Install Miri toolchain
+        if: ${{ steps.miri.outputs.enabled == 'true' }}
+        run: >-
+          rustup toolchain install "$RS_CI_MIRI_TOOLCHAIN"
+          --profile minimal
+          --component miri
+
+      - name: Prepare Miri sysroot
+        if: ${{ steps.miri.outputs.enabled == 'true' }}
+        run: cargo +"$RS_CI_MIRI_TOOLCHAIN" miri setup
+
+      - name: Run configured Miri checks
+        if: ${{ steps.miri.outputs.enabled == 'true' }}
+        run: |
+          set -euo pipefail
+          if [ -x .rs-ci/cargo-miri-check.sh ]; then
+            CHECKER=.rs-ci/cargo-miri-check.sh
+          else
+            CHECKER=./cargo-miri-check.sh
+          fi
+          RS_CI_PROJECT_ROOT="$PWD" "$CHECKER"
+
+      - name: Skip unconfigured Miri checks
+        if: ${{ steps.miri.outputs.enabled != 'true' }}
+        run: echo "Miri is not configured; skipping."
+
+  sanitizers:
+    name: Conditional sanitizer checks
+    if: ${{ github.event_name != 'schedule' }}
+    runs-on: ubuntu-latest
+    needs:
+      - fast_checks
+      - resolve_toolchains
+    env:
+      RS_CI_SANITIZER_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.sanitizer }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Detect sanitizer configuration
+        id: sanitizer
+        run: |
+          set -euo pipefail
+          if [ -x .rs-ci/cargo-sanitizer-check.sh ]; then
+            CHECKER=.rs-ci/cargo-sanitizer-check.sh
+          elif [ -x ./cargo-sanitizer-check.sh ]; then
+            CHECKER=./cargo-sanitizer-check.sh
+          else
+            SANITIZER_OPTED_IN=$(
+              cargo metadata --no-deps --format-version 1 |
+                jq -r '
+                  . as $metadata
+                  | any(
+                      $metadata.packages[];
+                      (
+                        .id as $id
+                        | (
+                            $metadata.workspace_members
+                            | index($id)
+                          ) != null
+                      )
+                      and (
+                        (
+                          .metadata["rs-ci"].sanitizers?
+                          // []
+                        )
+                        | index("address") != null
+                      )
+                    )
+                '
+            )
+            if [ "$SANITIZER_OPTED_IN" = "true" ]; then
+              echo "AddressSanitizer is configured, but cargo-sanitizer-check.sh was not found" >&2
+              echo "Update the .rs-ci submodule before enabling sanitizers." >&2
+              exit 1
+            fi
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          set +e
+          RS_CI_PROJECT_ROOT="$PWD" "$CHECKER" --is-configured address
+          SANITIZER_CONFIG_STATUS=$?
+          set -e
+          if [ "$SANITIZER_CONFIG_STATUS" -eq 0 ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          elif [ "$SANITIZER_CONFIG_STATUS" -eq 1 ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            exit "$SANITIZER_CONFIG_STATUS"
+          fi
+
+      - name: Install sanitizer toolchain
+        if: ${{ steps.sanitizer.outputs.enabled == 'true' }}
+        run: >-
+          rustup toolchain install "$RS_CI_SANITIZER_TOOLCHAIN"
+          --profile minimal
+          --component rust-src
+
+      - name: Run configured sanitizer checks
+        if: ${{ steps.sanitizer.outputs.enabled == 'true' }}
+        run: |
+          set -euo pipefail
+          if [ -x .rs-ci/cargo-sanitizer-check.sh ]; then
+            CHECKER=.rs-ci/cargo-sanitizer-check.sh
+          else
+            CHECKER=./cargo-sanitizer-check.sh
+          fi
+          RS_CI_PROJECT_ROOT="$PWD" "$CHECKER"
+
+      - name: Skip unconfigured sanitizer checks
+        if: ${{ steps.sanitizer.outputs.enabled != 'true' }}
+        run: echo "Cargo sanitizers are not configured; skipping."
+
+  fuzz_smoke:
+    name: Conditional cargo-fuzz smoke check
+    if: ${{ github.event_name != 'schedule' }}
+    runs-on: ubuntu-latest
+    needs:
+      - fast_checks
+      - resolve_toolchains
+    env:
+      RS_CI_FUZZ_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.fuzz }}
+      CARGO_FUZZ_VERSION: ${{ needs.resolve_toolchains.outputs.cargo_fuzz }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Detect cargo-fuzz package
+        id: fuzz
+        run: |
+          set -euo pipefail
+          if [ -x .rs-ci/cargo-fuzz-check.sh ]; then
+            CHECKER=.rs-ci/cargo-fuzz-check.sh
+          elif [ -x ./cargo-fuzz-check.sh ]; then
+            CHECKER=./cargo-fuzz-check.sh
+          else
+            echo "cargo-fuzz-check.sh was not found" >&2
+            exit 1
+          fi
+          if [ "$RS_CI_FUZZ_MODE" = "disabled" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if RS_CI_PROJECT_ROOT="$PWD" "$CHECKER" --is-configured; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore cargo-fuzz cache
+        if: ${{ steps.fuzz.outputs.enabled == 'true' }}
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/bin/cargo-fuzz
+          key: ${{ runner.os }}-cargo-fuzz-${{ env.RS_CI_FUZZ_TOOLCHAIN }}-${{ env.CARGO_FUZZ_VERSION }}-${{ hashFiles('fuzz/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-fuzz-${{ env.RS_CI_FUZZ_TOOLCHAIN }}-${{ env.CARGO_FUZZ_VERSION }}-
+
+      - name: Install fuzz toolchain
+        if: ${{ steps.fuzz.outputs.enabled == 'true' }}
+        run: rustup toolchain install "$RS_CI_FUZZ_TOOLCHAIN" --profile minimal
+
+      - name: Install cargo-fuzz
+        if: ${{ steps.fuzz.outputs.enabled == 'true' }}
+        run: |
+          if ! command -v cargo-fuzz > /dev/null 2>&1; then
+            cargo install --locked cargo-fuzz --version "$CARGO_FUZZ_VERSION"
+          fi
+
+      - name: Run conditional cargo-fuzz smoke checks
+        run: |
+          set -euo pipefail
+          if [ -x .rs-ci/cargo-fuzz-check.sh ]; then
+            CHECKER=.rs-ci/cargo-fuzz-check.sh
+          else
+            CHECKER=./cargo-fuzz-check.sh
+          fi
+          RS_CI_PROJECT_ROOT="$PWD" "$CHECKER"
+
+      - name: Upload fuzz crash artifacts
+        if: ${{ failure() && steps.fuzz.outputs.enabled == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-artifacts-${{ github.sha }}
+          path: fuzz/artifacts
+          if-no-files-found: ignore
+          retention-days: 14
+
+  loom:
+    name: Conditional Loom model checks
+    if: ${{ github.event_name != 'schedule' }}
+    runs-on: ubuntu-latest
+    needs:
+      - fast_checks
+      - resolve_toolchains
+    env:
+      RS_CI_BUILD_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.build }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Detect Loom model tests
+        id: loom
+        run: |
+          set -euo pipefail
+          if [ -x .rs-ci/cargo-loom-check.sh ]; then
+            CHECKER=.rs-ci/cargo-loom-check.sh
+          elif [ -x ./cargo-loom-check.sh ]; then
+            CHECKER=./cargo-loom-check.sh
+          else
+            echo "cargo-loom-check.sh was not found" >&2
+            exit 1
+          fi
+          if RS_CI_PROJECT_ROOT="$PWD" "$CHECKER" --is-configured; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Loom test toolchain
+        if: ${{ steps.loom.outputs.enabled == 'true' }}
+        run: rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
+
+      - name: Run conditional Loom model checks
+        if: ${{ steps.loom.outputs.enabled == 'true' }}
+        run: |
+          set -euo pipefail
+          if [ -x .rs-ci/cargo-loom-check.sh ]; then
+            CHECKER=.rs-ci/cargo-loom-check.sh
+          else
+            CHECKER=./cargo-loom-check.sh
+          fi
+          RS_CI_PROJECT_ROOT="$PWD" "$CHECKER"
+
+      - name: Skip unconfigured Loom model tests
+        if: ${{ steps.loom.outputs.enabled != 'true' }}
+        run: echo "loom is not configured; skipping."
 
   prepare_cargo_feature_matrix:
     name: Prepare Cargo feature matrix
@@ -146,6 +542,10 @@ jobs:
     needs:
       - fast_checks
       - prepare_cargo_feature_matrix
+      - resolve_toolchains
+    env:
+      RS_CI_BUILD_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.build }}
+      RS_CI_CLIPPY_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.clippy }}
 
     strategy:
       fail-fast: false
@@ -172,18 +572,18 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target
-          key: ${{ runner.os }}-cargo-feature-matrix-${{ env.RUST_TOOLCHAIN }}-${{ matrix.name }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-feature-matrix-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-${{ matrix.name }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-feature-matrix-${{ env.RUST_TOOLCHAIN }}-${{ matrix.name }}-${{ hashFiles('Cargo.toml') }}-
-            ${{ runner.os }}-cargo-feature-matrix-${{ env.RUST_TOOLCHAIN }}-
-            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-
+            ${{ runner.os }}-cargo-feature-matrix-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-${{ matrix.name }}-${{ hashFiles('Cargo.toml') }}-
+            ${{ runner.os }}-cargo-feature-matrix-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-
+            ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-
 
       - name: Install Rust toolchain
         if: ${{ matrix.enabled == true }}
         run: |
-          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
-          rustup component add clippy --toolchain "$RUST_TOOLCHAIN"
-          rustup default "$RUST_TOOLCHAIN"
+          rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
+          rustup toolchain install "$RS_CI_CLIPPY_TOOLCHAIN" --profile minimal
+          rustup component add clippy --toolchain "$RS_CI_CLIPPY_TOOLCHAIN"
 
       - name: Install jq
         if: ${{ matrix.enabled == true }}
@@ -203,6 +603,10 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - fast_checks
+      - resolve_toolchains
+    env:
+      RS_CI_BUILD_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.build }}
+      CARGO_LLVM_COV_VERSION: ${{ needs.resolve_toolchains.outputs.llvm_cov }}
 
     steps:
       - name: Checkout source
@@ -219,16 +623,15 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target
-          key: ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
-            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-
+            ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
+            ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-
 
       - name: Install Rust toolchain
         run: |
-          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
-          rustup component add llvm-tools-preview --toolchain "$RUST_TOOLCHAIN"
-          rustup default "$RUST_TOOLCHAIN"
+          rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
+          rustup component add llvm-tools-preview --toolchain "$RS_CI_BUILD_TOOLCHAIN"
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@v2
@@ -243,10 +646,10 @@ jobs:
           fi
 
       - name: Build project (debug)
-        run: cargo build --verbose
+        run: cargo +"$RS_CI_BUILD_TOOLCHAIN" build --verbose
 
       - name: Run doc tests
-        run: cargo test --doc --verbose
+        run: cargo +"$RS_CI_BUILD_TOOLCHAIN" test --doc --verbose
 
       - name: Check README dependency versions
         run: |
@@ -260,9 +663,21 @@ jobs:
             exit 1
           fi
 
+      - name: Verify Cargo package
+        run: |
+          set -euo pipefail
+          if [ -x .rs-ci/cargo-package-check.sh ]; then
+            RS_CI_PROJECT_ROOT="$PWD" .rs-ci/cargo-package-check.sh
+          elif [ -x ./cargo-package-check.sh ]; then
+            RS_CI_PROJECT_ROOT="$PWD" ./cargo-package-check.sh
+          else
+            echo "cargo-package-check.sh was not found" >&2
+            exit 1
+          fi
+
       - name: Run tests and generate coverage reports
         run: |
-          COVERAGE_ENFORCE_THRESHOLDS=0 COVERAGE_OPEN_HTML=0 ./coverage.sh all
+          COVERAGE_OPEN_HTML=0 ./coverage.sh all
           cp target/llvm-cov/coverage.json coverage.json
           cp target/llvm-cov/lcov.info lcov.info
           cp target/llvm-cov/coverage.txt coverage.txt
@@ -388,7 +803,7 @@ jobs:
 
       - name: Build project (release)
         if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)) }}
-        run: cargo build --release --verbose
+        run: cargo +"$RS_CI_BUILD_TOOLCHAIN" build --release --verbose
 
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@v7
@@ -468,6 +883,9 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - fast_checks
+      - resolve_toolchains
+    env:
+      RS_CI_BUILD_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.build }}
 
     steps:
       - name: Checkout source
@@ -484,18 +902,17 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target
-          key: ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
-            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-
+            ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
+            ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-
 
       - name: Install Rust toolchain
         run: |
-          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
-          rustup default "$RUST_TOOLCHAIN"
+          rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
 
       - name: Generate documentation
-        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --verbose
+        run: RUSTDOCFLAGS="-D warnings -D missing-docs" cargo +"$RS_CI_BUILD_TOOLCHAIN" doc --all-features --no-deps --verbose
 
       - name: Upload documentation artifact
         uses: actions/upload-artifact@v7
@@ -509,6 +926,9 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - fast_checks
+      - resolve_toolchains
+    env:
+      RS_CI_BUILD_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.build }}
 
     steps:
       - name: Checkout source
@@ -525,10 +945,10 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target
-          key: ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
-            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-
+            ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
+            ${{ runner.os }}-cargo-build-${{ env.RS_CI_BUILD_TOOLCHAIN }}-
 
       - name: Restore cargo-binstall cache
         uses: actions/cache@v5
@@ -548,8 +968,7 @@ jobs:
 
       - name: Install Rust toolchain
         run: |
-          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
-          rustup default "$RUST_TOOLCHAIN"
+          rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
 
       - name: Install cargo-binstall
         run: |
@@ -564,14 +983,18 @@ jobs:
           fi
 
       - name: Run security audit
-        run: cargo audit
+        run: cargo +"$RS_CI_BUILD_TOOLCHAIN" audit
 
   windows_test:
     name: Windows test
-    if: ${{ github.event_name != 'schedule' }}
+    if: ${{ inputs.run_windows_tests && github.event_name != 'schedule' }}
     runs-on: windows-2022
     needs:
       - fast_checks
+      - resolve_toolchains
+    env:
+      RS_CI_BUILD_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.build }}
+      RS_CI_CLIPPY_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.clippy }}
 
     steps:
       - name: Checkout source
@@ -587,10 +1010,10 @@ jobs:
             ~\.cargo\registry
             ~\.cargo\git
             target
-          key: ${{ runner.os }}-cargo-stable-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-lint-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-stable-${{ hashFiles('Cargo.toml') }}-
-            ${{ runner.os }}-cargo-stable-
+            ${{ runner.os }}-cargo-lint-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
+            ${{ runner.os }}-cargo-lint-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-
 
       - name: Install Rust
         shell: pwsh
@@ -600,22 +1023,26 @@ jobs:
           $env:Path = "$cargoBin;$env:Path"
           if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
             Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile "rustup-init.exe"
-            .\rustup-init.exe -y --default-toolchain stable --profile minimal
+            .\rustup-init.exe -y --default-toolchain $env:RS_CI_BUILD_TOOLCHAIN --profile minimal
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
-          rustup default stable
+          rustup toolchain install $env:RS_CI_BUILD_TOOLCHAIN --profile minimal
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          rustup component add clippy
+          rustup toolchain install $env:RS_CI_CLIPPY_TOOLCHAIN --profile minimal
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          rustc --version
-          cargo --version
+          rustup component add clippy --toolchain $env:RS_CI_CLIPPY_TOOLCHAIN
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustup run $env:RS_CI_BUILD_TOOLCHAIN rustc --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustup run $env:RS_CI_BUILD_TOOLCHAIN cargo --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run clippy on Windows
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
           $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
-          cargo clippy --all-targets --all-features -- -D warnings
+          cargo "+$env:RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build and test on Windows
@@ -623,5 +1050,48 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
-          cargo test --verbose
+          cargo "+$env:RS_CI_BUILD_TOOLCHAIN" test --all-features --verbose
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  macos_test:
+    name: macOS test
+    if: ${{ inputs.run_macos_tests && github.event_name != 'schedule' }}
+    runs-on: macos-15
+    needs:
+      - fast_checks
+      - resolve_toolchains
+    env:
+      RS_CI_BUILD_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.build }}
+      RS_CI_CLIPPY_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.clippy }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Restore cargo cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-cargo-lint-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-lint-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-${{ hashFiles('Cargo.toml') }}-
+            ${{ runner.os }}-cargo-lint-${{ env.RS_CI_BUILD_TOOLCHAIN }}-${{ env.RS_CI_CLIPPY_TOOLCHAIN }}-
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
+          rustup toolchain install "$RS_CI_CLIPPY_TOOLCHAIN" --profile minimal
+          rustup component add clippy --toolchain "$RS_CI_CLIPPY_TOOLCHAIN"
+
+      - name: Run clippy on macOS
+        run: cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
+
+      - name: Build and test on macOS
+        run: cargo +"$RS_CI_BUILD_TOOLCHAIN" test --all-features --verbose
