@@ -161,22 +161,22 @@ run_cargo_command() {
 
     case "$command" in
         check)
-            cargo +"$RS_CI_BUILD_TOOLCHAIN" check "${PACKAGE_ARGS[@]}" "${FEATURE_ARGS[@]}" --verbose
+            cargo +"$RS_CI_BUILD_TOOLCHAIN" check "${PACKAGE_ARGS[@]+${PACKAGE_ARGS[@]}}" "${FEATURE_ARGS[@]+${FEATURE_ARGS[@]}}" --verbose
             ;;
         build)
-            cargo +"$RS_CI_BUILD_TOOLCHAIN" build "${PACKAGE_ARGS[@]}" "${FEATURE_ARGS[@]}" --verbose
+            cargo +"$RS_CI_BUILD_TOOLCHAIN" build "${PACKAGE_ARGS[@]+${PACKAGE_ARGS[@]}}" "${FEATURE_ARGS[@]+${FEATURE_ARGS[@]}}" --verbose
             ;;
         test)
-            cargo +"$RS_CI_BUILD_TOOLCHAIN" test "${PACKAGE_ARGS[@]}" "${FEATURE_ARGS[@]}" --verbose
+            cargo +"$RS_CI_BUILD_TOOLCHAIN" test "${PACKAGE_ARGS[@]+${PACKAGE_ARGS[@]}}" "${FEATURE_ARGS[@]+${FEATURE_ARGS[@]}}" --verbose
             ;;
         doc)
-            RUSTDOCFLAGS="-D warnings" cargo +"$RS_CI_BUILD_TOOLCHAIN" doc --no-deps "${PACKAGE_ARGS[@]}" "${FEATURE_ARGS[@]}" --verbose
+            RUSTDOCFLAGS="-D warnings" cargo +"$RS_CI_BUILD_TOOLCHAIN" doc --no-deps "${PACKAGE_ARGS[@]+${PACKAGE_ARGS[@]}}" "${FEATURE_ARGS[@]+${FEATURE_ARGS[@]}}" --verbose
             ;;
         doc-test)
-            cargo +"$RS_CI_BUILD_TOOLCHAIN" test --doc "${PACKAGE_ARGS[@]}" "${FEATURE_ARGS[@]}" --verbose
+            cargo +"$RS_CI_BUILD_TOOLCHAIN" test --doc "${PACKAGE_ARGS[@]+${PACKAGE_ARGS[@]}}" "${FEATURE_ARGS[@]+${FEATURE_ARGS[@]}}" --verbose
             ;;
         clippy)
-            cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets "${PACKAGE_ARGS[@]}" "${FEATURE_ARGS[@]}" -- -D warnings
+            cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets "${PACKAGE_ARGS[@]+${PACKAGE_ARGS[@]}}" "${FEATURE_ARGS[@]+${FEATURE_ARGS[@]}}" -- -D warnings
             ;;
         *)
             echo "error: unsupported command '$command'" >&2
