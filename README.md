@@ -271,10 +271,11 @@ toolchain change leaves Miri's cached sysroot or artifacts inconsistent, run:
 cargo +"$RS_CI_MIRI_TOOLCHAIN" miri clean
 ```
 
-AddressSanitizer currently supports the `x86_64-unknown-linux-gnu` CI path only.
-It uses a dated nightly, `rust-src`, `-Zsanitizer=address`, and `-Zbuild-std`.
-An opted-in project fails clearly on any other local host instead of reporting
-an unexecuted check as successful.
+AddressSanitizer runs on Linux `x86_64` and macOS (`arm64` and `x86_64`). It
+uses a dated nightly, `rust-src`, `-Zsanitizer=address`, and `-Zbuild-std`.
+Unsupported hosts report a skip. The reusable GitHub workflow runs opted-in
+Miri and AddressSanitizer checks on both Linux and macOS; Windows continues to
+run its regular test job only.
 
 ## Cargo Feature Matrix
 
