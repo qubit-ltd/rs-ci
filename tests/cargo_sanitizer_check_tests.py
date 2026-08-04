@@ -158,17 +158,32 @@ class CargoSanitizerCheckTests(unittest.TestCase):
             self.command_log.read_text(encoding="utf-8").splitlines(),
         )
 
-    def test_rejects_configured_address_sanitizer_on_unsupported_host(
-        self,
-    ) -> None:
+    def test_runs_address_sanitizer_on_macos_arm64(self) -> None:
         result = self.run_checker(
             rs_ci={"sanitizers": ["address"]},
             system="Darwin",
             machine="arm64",
         )
 
-        self.assertNotEqual(0, result.returncode)
-        self.assertIn("Linux x86_64", result.stderr)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("aarch64-apple-darwin", result.stdout)
+        self.assertIn(
+            "--target aarch64-apple-darwin --all-features --package demo",
+            self.command_log.read_text(encoding="utf-8"),
+        )
+
+    def test_skips_configured_address_sanitizer_on_unsupported_host(
+        self,
+    ) -> None:
+        result = self.run_checker(
+            rs_ci={"sanitizers": ["address"]},
+            system="FreeBSD",
+            machine="x86_64",
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("not supported", result.stdout)
+        self.assertIn("skipping", result.stdout)
         self.assertFalse(self.command_log.exists())
 
     def test_propagates_sanitizer_failure(self) -> None:

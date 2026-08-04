@@ -250,9 +250,10 @@ Miri sysroot 或构建缓存出现不一致，可以运行：
 cargo +"$RS_CI_MIRI_TOOLCHAIN" miri clean
 ```
 
-AddressSanitizer 当前只支持 `x86_64-unknown-linux-gnu` CI 路径，使用固定日期的
-nightly、`rust-src`、`-Zsanitizer=address` 和 `-Zbuild-std`。已经 opt-in 的
-项目在其他本地主机上会明确失败，不会把未执行的检查报告为成功。
+AddressSanitizer 支持 Linux `x86_64` 以及 macOS（`arm64` 和 `x86_64`），使用
+固定日期的 nightly、`rust-src`、`-Zsanitizer=address` 和 `-Zbuild-std`。
+不支持的平台会报告跳过。可复用 GitHub workflow 会在 Linux 和 macOS 上运行已
+opt-in 的 Miri 与 AddressSanitizer 检查；Windows 继续只运行常规测试 job。
 
 ## Cargo Feature Matrix
 
