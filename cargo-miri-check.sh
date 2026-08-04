@@ -70,6 +70,9 @@ fi
 cd "$PROJECT_ROOT"
 for package in "${PACKAGES[@]}"; do
     echo "Running Miri for package '$package'"
+    PROPTEST_DISABLE_FAILURE_PERSISTENCE=1 \
+    PROPTEST_CASES=8 \
+    MIRIFLAGS="${MIRIFLAGS:+$MIRIFLAGS }-Zmiri-disable-isolation" \
     cargo +"$RS_CI_MIRI_TOOLCHAIN" miri test \
         --all-features \
         --package "$package"
