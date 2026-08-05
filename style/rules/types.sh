@@ -26,20 +26,31 @@ scan_top_level_types() {
         }
 
         {
-            line = $0
+            raw = $0
+            line = raw
             sub(/^[[:space:]]*/, "", line)
 
-            if (visibility == "public") {
-                if (line !~ /^pub([[:space:]]*\([^)]*\))?[[:space:]]+/) {
-                    next
+            if (depth == 0 && line !~ /^\/\//) {
+                if (visibility == "public") {
+                    if (line ~ /^pub([[:space:]]*\([^)]*\))?[[:space:]]+/) {
+                        candidate = line
+                        sub(/^pub([[:space:]]*\([^)]*\))?[[:space:]]+/, "", candidate)
+                        emit_if_type(candidate, FNR)
+                    }
+                } else {
+                    candidate = line
+                    sub(/^pub([[:space:]]*\([^)]*\))?[[:space:]]+/, "", candidate)
+                    emit_if_type(candidate, FNR)
                 }
-                sub(/^pub([[:space:]]*\([^)]*\))?[[:space:]]+/, "", line)
-                emit_if_type(line, FNR)
-                next
             }
 
-            sub(/^pub([[:space:]]*\([^)]*\))?[[:space:]]+/, "", line)
-            emit_if_type(line, FNR)
+            sub(/\/\/.*/, "", raw)
+            opens = gsub(/\{/, "{", raw)
+            closes = gsub(/\}/, "}", raw)
+            depth += opens - closes
+            if (depth < 0) {
+                depth = 0
+            }
         }
     ' "$file"
 }
