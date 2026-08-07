@@ -3,14 +3,15 @@
 # This configuration requires nightly Rust for imports formatting.
 # Run `./align-ci.sh` to format code with the pinned nightly toolchain.
 
-# Format every imported object as its own `use` declaration. Preserve the
-# manually maintained three groups because rustfmt cannot distinguish `qubit`
-# crates from other externals and cannot infer the project's custom boundary.
+# Format every imported object as its own `use` declaration. Use rustfmt's
+# standard/external/current-crate grouping so `crate::`, `super::`, and
+# `self::` imports always follow external crates. The style check further
+# separates third-party and `qubit` external crates, which rustfmt cannot do.
 #
 # Note: This is an unstable feature that requires nightly Rust
 max_width = 80
 wrap_comments = true
 comment_width = 80
 imports_granularity = "Item"
-group_imports = "Preserve"
+group_imports = "StdExternalCrate"
 reorder_imports = false

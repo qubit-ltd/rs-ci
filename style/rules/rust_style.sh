@@ -75,6 +75,10 @@ scan_import_order() {
             return line ~ /^[[:space:]]*(pub([[:space:]]*\([^)]*\))?[[:space:]]+)?use[[:space:]]+[^{};]+;[[:space:]]*$/
         }
 
+        function is_use_attribute(line) {
+            return line ~ /^[[:space:]]*#\[[[:space:]]*(cfg|cfg_attr|allow|deny|warn|expect)[[:space:]]*[(:]/
+        }
+
         {
             if (is_simple_use($0)) {
                 text = $0
@@ -106,7 +110,7 @@ scan_import_order() {
                 if (have_import) {
                     blank_lines++
                 }
-            } else if (have_import) {
+            } else if (have_import && !is_use_attribute($0)) {
                 blank_lines = 0
             }
         }
