@@ -65,10 +65,10 @@ scan_import_order() {
             if (path ~ /^(crate|self|super)(::|$)/) {
                 return 2
             }
-            if (path ~ /^qubit[A-Za-z0-9_]*::/) {
-                return 1
+            if (path ~ /^(std|core|alloc)(::|$)/) {
+                return 0
             }
-            return 0
+            return 1
         }
 
         function is_simple_use(line) {
@@ -90,7 +90,7 @@ scan_import_order() {
                 group = import_group(path)
 
                 if (have_import && group < last_group) {
-                    print FNR ":third-party imports must precede qubit imports, and qubit imports must precede current-crate imports"
+                    print FNR ":standard-library imports must precede external imports, and external imports must precede current-crate imports"
                 }
                 if (have_import && group != last_group && blank_lines != 1) {
                     print FNR ":import groups must be separated by exactly one blank line"

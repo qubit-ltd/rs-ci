@@ -107,7 +107,7 @@ class StyleCheckScriptTests(unittest.TestCase):
                 "#[allow(unused_imports)]\n"
                 "use serde::{Deserialize, Serialize};\n"
                 "use qubit_types::EntityId;\n"
-                "use chrono::DateTime;\n"
+                "use std::time::Duration;\n"
                 "use crate::model::App;\n"
                 "\n"
                 "pub struct Widget {\n"
@@ -122,7 +122,7 @@ class StyleCheckScriptTests(unittest.TestCase):
         self.assertEqual(1, result.returncode)
         self.assertIn("unused_imports", result.stdout)
         self.assertIn("brace lists", result.stdout)
-        self.assertIn("third-party imports must precede qubit imports", result.stdout)
+        self.assertIn("standard-library imports must precede external imports", result.stdout)
         self.assertIn("fully qualified external crate path", result.stdout)
 
     def test_import_style_rules_accept_canonical_imports(self) -> None:
@@ -131,10 +131,11 @@ class StyleCheckScriptTests(unittest.TestCase):
             (project_root / "src").mkdir()
             (project_root / "tests").mkdir()
             (project_root / "src" / "lib.rs").write_text(
-                "use chrono::DateTime;\n"
-                "use serde::Deserialize;\n"
+                "use std::time::Duration;\n"
                 "\n"
+                "use chrono::DateTime;\n"
                 "use qubit_types::EntityId;\n"
+                "use serde::Deserialize;\n"
                 "\n"
                 "use crate::model::App;\n",
                 encoding="utf-8",

@@ -5,8 +5,8 @@
 
 # Format every imported object as its own `use` declaration. Use rustfmt's
 # standard/external/current-crate grouping so `crate::`, `super::`, and
-# `self::` imports always follow external crates. The style check further
-# separates third-party and `qubit` external crates, which rustfmt cannot do.
+# `self::` imports always follow external crates. All non-standard external
+# crates, including `qubit_*` crates, belong to the same external group.
 #
 # Note: This is an unstable feature that requires nightly Rust
 max_width = 80
