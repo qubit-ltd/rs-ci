@@ -137,6 +137,8 @@ class StyleCheckScriptTests(unittest.TestCase):
                 "use qubit_types::EntityId;\n"
                 "use serde::Deserialize;\n"
                 "\n"
+                "use self::internal::Helper;\n"
+                "use super::Category;\n"
                 "use crate::model::App;\n",
                 encoding="utf-8",
             )
