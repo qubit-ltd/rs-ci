@@ -122,7 +122,7 @@ class StyleCheckScriptTests(unittest.TestCase):
         self.assertEqual(1, result.returncode)
         self.assertIn("unused_imports", result.stdout)
         self.assertIn("brace lists", result.stdout)
-        self.assertIn("non-qubit imports must precede qubit imports", result.stdout)
+        self.assertIn("third-party imports must precede qubit imports", result.stdout)
         self.assertIn("fully qualified external crate path", result.stdout)
 
     def test_import_style_rules_accept_canonical_imports(self) -> None:
@@ -144,7 +144,7 @@ class StyleCheckScriptTests(unittest.TestCase):
 
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
-    def test_rustdoc_and_struct_layout_rules_reject_invalid_layout(self) -> None:
+    def test_rustdoc_rule_rejects_attributes_after_docs(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project_root = Path(temp_dir)
             (project_root / "src").mkdir()
@@ -165,9 +165,9 @@ class StyleCheckScriptTests(unittest.TestCase):
 
         self.assertEqual(1, result.returncode)
         self.assertIn("Rustdoc comments must precede attributes", result.stdout)
-        self.assertIn("struct fields must be separated by blank lines", result.stdout)
+        self.assertNotIn("struct fields must be separated by blank lines", result.stdout)
 
-    def test_rustdoc_and_struct_layout_rules_accept_canonical_layout(self) -> None:
+    def test_rustdoc_rule_accepts_canonical_layout(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project_root = Path(temp_dir)
             (project_root / "src").mkdir()

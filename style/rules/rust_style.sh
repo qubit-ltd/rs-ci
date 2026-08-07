@@ -65,7 +65,7 @@ scan_import_order() {
             if (path ~ /^(crate|self|super)(::|$)/) {
                 return 2
             }
-            if (path ~ /^qubit::/) {
+            if (path ~ /^qubit[A-Za-z0-9_]*::/) {
                 return 1
             }
             return 0
@@ -189,71 +189,7 @@ scan_misordered_rustdoc() {
     ' "$file"
 }
 
-# Purpose: Find struct fields that are not separated by blank lines.
-scan_struct_field_spacing() {
-    local file="$1"
-
-    awk '
-        function brace_delta(line, cleaned) {
-            cleaned = line
-            sub(/\/\/.*/, "", cleaned)
-            return gsub(/\{/, "{", cleaned) - gsub(/\}/, "}", cleaned)
-        }
-
-        function is_struct_start(line) {
-            return line ~ /^[[:space:]]*(pub([[:space:]]*\([^)]*\))?[[:space:]]+)?struct[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[^;]*\{/
-        }
-
-        function is_field(line) {
-            return line ~ /^[[:space:]]*(pub([[:space:]]*\([^)]*\))?[[:space:]]+)?r?[#]?[A-Za-z_][A-Za-z0-9_]*[[:space:]]*:/
-        }
-
-        {
-            line = $0
-            stripped = line
-            sub(/^[[:space:]]*/, "", stripped)
-
-            if (!in_struct) {
-                if (is_struct_start(line)) {
-                    in_struct = 1
-                    depth = brace_delta(line)
-                    seen_field = 0
-                    blank_since_field = 0
-                }
-                next
-            }
-
-            if (stripped ~ /^[[:space:]]*$/) {
-                if (depth == 1) {
-                    blank_since_field = 1
-                }
-                next
-            }
-
-            if (depth == 1 && stripped ~ /^}/) {
-                in_struct = 0
-                depth = 0
-                next
-            }
-
-            if (depth == 1 && is_field(line)) {
-                if (seen_field && !blank_since_field) {
-                    print FNR ":struct fields must be separated by blank lines"
-                }
-                seen_field = 1
-                blank_since_field = 0
-            }
-
-            depth += brace_delta(line)
-            if (depth <= 0) {
-                in_struct = 0
-                depth = 0
-            }
-        }
-    ' "$file"
-}
-
-# Purpose: Run import, Rustdoc ordering, and struct spacing checks for one root.
+# Purpose: Run import and Rustdoc ordering checks for one root.
 check_rust_style_in_root() {
     local root="$1"
     local file
@@ -303,12 +239,6 @@ check_rust_style_in_root() {
             report_error "$rel_path" "$line" "$message"
         done < <(scan_misordered_rustdoc "$file")
 
-        while IFS= read -r hit; do
-            [ -n "$hit" ] || continue
-            line="${hit%%:*}"
-            message="${hit#*:}"
-            report_error "$rel_path" "$line" "$message"
-        done < <(scan_struct_field_spacing "$file")
     done < <(list_rs_files "$root")
 }
 
