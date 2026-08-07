@@ -50,7 +50,12 @@ scan_grouped_imports() {
     ' "$file"
 }
 
-# Purpose: Check import group order, blank separators, and lexical ordering.
+# Purpose: Check import group order and blank separators.
+#
+# Rustfmt with style edition 2024 owns ordering within every group. Its
+# version-aware ordering is intentionally not duplicated here because a shell
+# string comparison would incorrectly reject paths such as atomic_i8 before
+# atomic_i16.
 scan_import_order() {
     local file="$1"
 
@@ -79,19 +84,6 @@ scan_import_order() {
             return line ~ /^[[:space:]]*#\[[[:space:]]*(cfg|cfg_attr|allow|deny|warn|expect)[[:space:]]*[(:]/
         }
 
-        function sort_key(path, group) {
-            if (group == 2) {
-                if (path ~ /^self(::|$)/) {
-                    return "0:" path
-                }
-                if (path ~ /^super(::|$)/) {
-                    return "1:" path
-                }
-                return "2:" path
-            }
-            return path
-        }
-
         {
             if (is_simple_use($0)) {
                 text = $0
@@ -101,7 +93,6 @@ scan_import_order() {
                 sub(/[[:space:]]+as[[:space:]]+[A-Za-z_][A-Za-z0-9_]*$/, "", path)
                 path = trim(path)
                 group = import_group(path)
-                order_key = sort_key(path, group)
 
                 if (have_import && group < last_group) {
                     print FNR ":standard-library imports must precede external imports, and external imports must precede current-crate imports"
@@ -109,13 +100,9 @@ scan_import_order() {
                 if (have_import && group != last_group && blank_lines != 1) {
                     print FNR ":import groups must be separated by exactly one blank line"
                 }
-                if (have_import && group == last_group && order_key < last_order_key) {
-                    print FNR ":imports within each group must be sorted lexicographically"
-                }
 
                 have_import = 1
                 last_group = group
-                last_order_key = order_key
                 blank_lines = 0
                 next
             }

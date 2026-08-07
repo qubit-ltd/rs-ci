@@ -104,8 +104,11 @@ class ToolchainContractTests(unittest.TestCase):
     def test_rustfmt_splits_import_items_and_preserves_style_groups(self) -> None:
         config = RUSTFMT_CONFIG.read_text(encoding="utf-8")
 
+        self.assertIn('edition = "2024"', config)
+        self.assertIn('style_edition = "2024"', config)
         self.assertIn('imports_granularity = "Item"', config)
-        self.assertIn('group_imports = "Preserve"', config)
+        self.assertIn('group_imports = "StdExternalCrate"', config)
+        self.assertIn("reorder_imports = true", config)
         self.assertNotIn("imports_layout", config)
 
 

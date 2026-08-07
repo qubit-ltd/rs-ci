@@ -9,6 +9,8 @@
 # crates, including `qubit_*` crates, belong to the same external group.
 #
 # Note: This is an unstable feature that requires nightly Rust
+edition = "2024"
+style_edition = "2024"
 max_width = 80
 wrap_comments = true
 comment_width = 80

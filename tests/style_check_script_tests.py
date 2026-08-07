@@ -152,6 +152,24 @@ class StyleCheckScriptTests(unittest.TestCase):
 
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
+    def test_import_style_rules_accept_rustfmt_2024_version_ordering(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir)
+            (project_root / "src").mkdir()
+            (project_root / "tests").mkdir()
+            (project_root / "src" / "lib.rs").write_text(
+                "use super::atomic_i8;\n"
+                "use super::atomic_i16;\n"
+                "use super::atomic_i32;\n"
+                "use super::atomic_i64;\n"
+                "use super::atomic_i128;\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_import_style_check(project_root)
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
     def test_rustdoc_rule_rejects_attributes_after_docs(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project_root = Path(temp_dir)
