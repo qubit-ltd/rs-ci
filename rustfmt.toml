@@ -3,17 +3,14 @@
 # This configuration requires nightly Rust for imports formatting.
 # Run `./align-ci.sh` to format code with the pinned nightly toolchain.
 
-# Format imports with vertical layout (each item on its own line within braces)
-# This keeps the `pub use module::{...}` format but puts each item on a separate line
-# Example:
-#   pub use module::{
-#       Item1,
-#       Item2,
-#       Item3,
-#   };
+# Format every imported object as its own `use` declaration. The style checks
+# enforce the additional grouping between third-party, `qubit`, and current-crate
+# imports because rustfmt cannot distinguish `qubit` crates from other externals.
 #
 # Note: This is an unstable feature that requires nightly Rust
 max_width = 80
 wrap_comments = true
 comment_width = 80
-imports_layout = "Vertical"
+imports_granularity = "Item"
+group_imports = "Preserve"
+reorder_imports = true

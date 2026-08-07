@@ -101,6 +101,13 @@ class ToolchainContractTests(unittest.TestCase):
         self.assertIn("Run `./align-ci.sh`", config)
         self.assertNotIn("cargo +nightly fmt", config)
 
+    def test_rustfmt_splits_import_items_and_preserves_style_groups(self) -> None:
+        config = RUSTFMT_CONFIG.read_text(encoding="utf-8")
+
+        self.assertIn('imports_granularity = "Item"', config)
+        self.assertIn('group_imports = "Preserve"', config)
+        self.assertNotIn("imports_layout", config)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -70,6 +70,125 @@ class StyleCheckScriptTests(unittest.TestCase):
             env=environment,
         )
 
+    def run_import_style_check(
+        self,
+        project_root: Path,
+    ) -> subprocess.CompletedProcess[str]:
+        environment = os.environ.copy()
+        environment.update(
+            {
+                "RS_CI_PROJECT_ROOT": str(project_root),
+                "STYLE_SOURCE_DIR": "src",
+                "STYLE_TEST_DIR": "tests",
+                "STYLE_ENFORCE_INLINE_TESTS": "0",
+                "STYLE_ENFORCE_TEST_FILE_NAMES": "0",
+                "STYLE_ENFORCE_TEST_REDIRECTS": "0",
+                "STYLE_ENFORCE_SOURCE_TEST_PAIRS": "0",
+                "STYLE_ENFORCE_PUBLIC_TYPE_FILES": "0",
+                "STYLE_ENFORCE_AGGREGATION_FILES": "0",
+                "STYLE_ENFORCE_COVERAGE_CFG": "0",
+                "STYLE_ENFORCE_EXPLICIT_IMPORTS": "1",
+            }
+        )
+        return subprocess.run(
+            ["bash", str(STYLE_CHECK_SCRIPT)],
+            text=True,
+            capture_output=True,
+            check=False,
+            env=environment,
+        )
+
+    def test_import_style_rules_reject_invalid_imports(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir)
+            (project_root / "src").mkdir()
+            (project_root / "tests").mkdir()
+            (project_root / "src" / "lib.rs").write_text(
+                "#[allow(unused_imports)]\n"
+                "use serde::{Deserialize, Serialize};\n"
+                "use qubit_types::EntityId;\n"
+                "use chrono::DateTime;\n"
+                "use crate::model::App;\n"
+                "\n"
+                "pub struct Widget {\n"
+                "    /// The entity information.\n"
+                "    pub info: Option<qubit_mixin::InfoWithEntity>,\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_import_style_check(project_root)
+
+        self.assertEqual(1, result.returncode)
+        self.assertIn("unused_imports", result.stdout)
+        self.assertIn("brace lists", result.stdout)
+        self.assertIn("non-qubit imports must precede qubit imports", result.stdout)
+        self.assertIn("fully qualified external crate path", result.stdout)
+
+    def test_import_style_rules_accept_canonical_imports(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir)
+            (project_root / "src").mkdir()
+            (project_root / "tests").mkdir()
+            (project_root / "src" / "lib.rs").write_text(
+                "use chrono::DateTime;\n"
+                "use serde::Deserialize;\n"
+                "\n"
+                "use qubit_types::EntityId;\n"
+                "\n"
+                "use crate::model::App;\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_import_style_check(project_root)
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    def test_rustdoc_and_struct_layout_rules_reject_invalid_layout(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir)
+            (project_root / "src").mkdir()
+            (project_root / "tests").mkdir()
+            (project_root / "src" / "lib.rs").write_text(
+                "#[derive(Debug)]\n"
+                "/// Represents a widget.\n"
+                "pub struct Widget {\n"
+                "    /// The first value.\n"
+                "    pub first: String,\n"
+                "    /// The second value.\n"
+                "    pub second: String,\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_import_style_check(project_root)
+
+        self.assertEqual(1, result.returncode)
+        self.assertIn("Rustdoc comments must precede attributes", result.stdout)
+        self.assertIn("struct fields must be separated by blank lines", result.stdout)
+
+    def test_rustdoc_and_struct_layout_rules_accept_canonical_layout(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir)
+            (project_root / "src").mkdir()
+            (project_root / "tests").mkdir()
+            (project_root / "src" / "lib.rs").write_text(
+                "/// Represents a widget.\n"
+                "#[derive(Debug)]\n"
+                "pub struct Widget {\n"
+                "    /// The first value.\n"
+                "    pub first: String,\n"
+                "\n"
+                "    /// The second value.\n"
+                "    pub second: String,\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_import_style_check(project_root)
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
     def test_source_test_pairs_are_enabled_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project_root = Path(temp_dir)

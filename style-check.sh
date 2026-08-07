@@ -40,6 +40,7 @@ source "$script_dir/style/common.sh"
 source "$script_dir/style/rules/tests.sh"
 source "$script_dir/style/rules/types.sh"
 source "$script_dir/style/rules/aggregation_imports.sh"
+source "$script_dir/style/rules/rust_style.sh"
 source "$script_dir/style/rules/coverage.sh"
 
 # Purpose: Print CLI usage, environment toggles, and allow-comment conventions.
@@ -101,6 +102,7 @@ run_style_checks() {
     check_public_type_files "$source_root"
     check_aggregation_files "$source_root" "$test_root"
     check_explicit_imports "$source_root" "$test_root"
+    check_rust_style "$source_root" "$test_root"
     check_coverage_cfg "$source_root"
 }
 
