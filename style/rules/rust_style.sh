@@ -61,11 +61,11 @@ scan_import_order() {
             return value
         }
 
-        function import_group(root) {
-            if (root ~ /^(crate|self|super)$/) {
+        function import_group(path) {
+            if (path ~ /^(crate|self|super)(::|$)/) {
                 return 2
             }
-            if (root ~ /^qubit/) {
+            if (path ~ /^qubit::/) {
                 return 1
             }
             return 0
@@ -83,12 +83,10 @@ scan_import_order() {
                 path = text
                 sub(/[[:space:]]+as[[:space:]]+[A-Za-z_][A-Za-z0-9_]*$/, "", path)
                 path = trim(path)
-                root = path
-                sub(/::.*/, "", root)
-                group = import_group(root)
+                group = import_group(path)
 
                 if (have_import && group < last_group) {
-                    print FNR ":non-qubit imports must precede qubit imports, and qubit imports must precede current-crate imports"
+                    print FNR ":third-party imports must precede qubit imports, and qubit imports must precede current-crate imports"
                 }
                 if (have_import && group != last_group && blank_lines != 1) {
                     print FNR ":import groups must be separated by exactly one blank line"
