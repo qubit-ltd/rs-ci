@@ -139,7 +139,12 @@ class StyleCheckScriptTests(unittest.TestCase):
                 "\n"
                 "use self::internal::Helper;\n"
                 "use super::Category;\n"
-                "use crate::model::App;\n",
+                "use crate::model::App;\n"
+                "\n"
+                "pub mod nested {\n"
+                "    pub use super::atomic_bool::AtomicBool;\n"
+                "    pub use super::atomic_f32::AtomicF32;\n"
+                "}\n",
                 encoding="utf-8",
             )
 

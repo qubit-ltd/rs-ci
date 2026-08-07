@@ -125,6 +125,7 @@ scan_import_order() {
                     blank_lines++
                 }
             } else if (have_import && !is_use_attribute($0)) {
+                have_import = 0
                 blank_lines = 0
             }
         }
@@ -182,6 +183,10 @@ scan_misordered_rustdoc() {
     local file="$1"
 
     awk '
+        /^[[:space:]]*#\[[[:space:]]*doc[[:space:]]*=/ {
+            previous_attribute = 0
+            next
+        }
         /^[[:space:]]*#\[/ {
             previous_attribute = 1
             next
