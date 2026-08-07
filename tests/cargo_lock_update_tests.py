@@ -25,6 +25,7 @@ class CargoLockUpdateTests(unittest.TestCase):
         self,
         *,
         auxiliary_manifests: str = "",
+        include_readme_fixture: bool = False,
         mode: str = "--update",
     ) -> tuple[subprocess.CompletedProcess[str], list[str], Path]:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -40,6 +41,17 @@ class CargoLockUpdateTests(unittest.TestCase):
                 )
                 (manifest_dir / "Cargo.lock").write_text(
                     f"{directory} lock\n",
+                    encoding="utf-8",
+                )
+            if include_readme_fixture:
+                manifest_dir = root / "tests" / "fixtures" / "readme_quick_start"
+                manifest_dir.mkdir(parents=True)
+                (manifest_dir / "Cargo.toml").write_text(
+                    "[package]\nname = \"readme-quick-start\"\n",
+                    encoding="utf-8",
+                )
+                (manifest_dir / "Cargo.lock").write_text(
+                    "readme fixture lock\n",
                     encoding="utf-8",
                 )
             for manifest in auxiliary_manifests.splitlines():
@@ -128,7 +140,13 @@ class CargoLockUpdateTests(unittest.TestCase):
 
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(12, len(commands), commands)
-        self.assertEqual(8, sum("metadata" in command and "--locked" in command for command in commands))
+        self.assertEqual(
+            8,
+            sum(
+                "metadata" in command and "--locked" in command
+                for command in commands
+            ),
+        )
         self.assertEqual(4, sum("generate-lockfile" in command for command in commands))
 
     def test_check_mode_reports_stale_manifest_without_updating(self) -> None:
@@ -138,6 +156,28 @@ class CargoLockUpdateTests(unittest.TestCase):
 
         self.assertNotEqual(0, result.returncode)
         self.assertTrue(all("generate-lockfile" not in command for command in commands))
+
+    def test_update_covers_conventional_readme_quick_start_fixture(self) -> None:
+        result, commands, _ = self.run_helper(
+            include_readme_fixture=True,
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(12, len(commands), commands)
+        self.assertEqual(
+            8,
+            sum(
+                "metadata" in command and "--locked" in command
+                for command in commands
+            ),
+        )
+        self.assertEqual(4, sum("generate-lockfile" in command for command in commands))
+        self.assertTrue(
+            any(
+                "tests/fixtures/readme_quick_start/Cargo.toml" in command
+                for command in commands
+            )
+        )
 
 
 if __name__ == "__main__":

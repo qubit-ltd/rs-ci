@@ -12,6 +12,7 @@
 # Keeps the project and supported auxiliary Cargo.lock files in sync with their
 # manifests. The root lockfile covers workspace packages such as Loom tests;
 # independent helper crates (for example fuzz/) have their own lockfile.
+# The conventional README quick-start fixture is also synchronized when present.
 #
 
 set -euo pipefail
@@ -25,7 +26,8 @@ usage() {
 Usage: ./cargo-lock-update.sh [--check|--update]
 
 Validate or regenerate Cargo.lock files for the project root, the conventional
-fuzz/ and loom/ auxiliary crates, and manifests listed in
+fuzz/, loom/, and tests/fixtures/readme_quick_start/ auxiliary crates, and
+manifests listed in
 RS_CI_AUXILIARY_MANIFESTS (one path per line). Relative paths are resolved
 against RS_CI_PROJECT_ROOT.
 
@@ -86,6 +88,11 @@ for auxiliary_dir in fuzz loom; do
         add_manifest "$PROJECT_ROOT/$auxiliary_dir/Cargo.toml"
     fi
 done
+
+README_QUICK_START_MANIFEST="$PROJECT_ROOT/tests/fixtures/readme_quick_start/Cargo.toml"
+if [ -f "$README_QUICK_START_MANIFEST" ]; then
+    add_manifest "$README_QUICK_START_MANIFEST"
+fi
 
 if [ -n "${RS_CI_AUXILIARY_MANIFESTS:-}" ]; then
     while IFS= read -r auxiliary_manifest; do

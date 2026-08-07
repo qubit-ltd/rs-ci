@@ -193,7 +193,8 @@ cargo install cargo-fuzz
 
 `align-ci.sh` 和 `ci-check.sh` 会在其他检查之前运行
 `cargo-lock-update.sh`。该脚本会校验项目根目录的 `Cargo.lock`，以及存在时的
-约定辅助项目 `fuzz/Cargo.toml`、`loom/Cargo.toml`，并处理
+约定辅助项目 `fuzz/Cargo.toml`、`loom/Cargo.toml`、
+`tests/fixtures/readme_quick_start/Cargo.toml`，并处理
 `RS_CI_AUXILIARY_MANIFESTS` 中逐行列出的其他 manifest。缺失或过期的 lock 文件会
 通过 `cargo generate-lockfile` 自动重新生成，因此独立的 fuzz 或辅助 crate 不会与
 manifest 漂移，而 Loom package 仍由 workspace 根 lock 文件统一管理。

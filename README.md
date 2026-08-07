@@ -209,9 +209,10 @@ the normal CI workflow.
 
 `align-ci.sh` and `ci-check.sh` run `cargo-lock-update.sh` before their other
 checks. The helper validates the project-root `Cargo.lock`, the conventional
-`fuzz/Cargo.toml` and `loom/Cargo.toml` auxiliary projects when present, and
-any additional manifests listed in `RS_CI_AUXILIARY_MANIFESTS` (one path per
-line). Missing or stale lockfiles are regenerated with
+`fuzz/Cargo.toml`, `loom/Cargo.toml`, and
+`tests/fixtures/readme_quick_start/Cargo.toml` auxiliary projects when
+present, and any additional manifests listed in `RS_CI_AUXILIARY_MANIFESTS`
+(one path per line). Missing or stale lockfiles are regenerated with
 `cargo generate-lockfile`, so independent fuzz or helper crates cannot drift
 from their manifests while the workspace lockfile remains the source of truth
 for Loom packages.
