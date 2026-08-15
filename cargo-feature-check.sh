@@ -37,6 +37,19 @@ else
     CONFIG_FILE="$PROJECT_ROOT/$CONFIG_FILE_NAME"
 fi
 
+# Feature-matrix runs intentionally use a target directory separate from the
+# main CI build.  The matrix exercises mutually exclusive feature sets, and
+# sharing artifacts with the preceding all-feature test can leave rustdoc
+# resolving an incompatible dependency artifact (for example, rlib vs rmeta).
+if [ -z "${RS_CI_FEATURE_MATRIX_TARGET_DIR:-}" ]; then
+    if [ -n "${CARGO_TARGET_DIR:-}" ]; then
+        RS_CI_FEATURE_MATRIX_TARGET_DIR="$CARGO_TARGET_DIR/feature-matrix"
+    else
+        RS_CI_FEATURE_MATRIX_TARGET_DIR="$PROJECT_ROOT/target/rs-ci-feature-matrix"
+    fi
+fi
+export CARGO_TARGET_DIR="$RS_CI_FEATURE_MATRIX_TARGET_DIR"
+
 print_usage() {
     echo "Usage: ./cargo-feature-check.sh [run-all|run-index <index>|github-matrix|validate|help]"
     echo ""

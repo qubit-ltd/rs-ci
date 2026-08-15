@@ -48,7 +48,36 @@ for package in "${packages[@]}"; do
     package_args+=(--package "$package")
 done
 
-if cargo +"$RS_CI_BUILD_TOOLCHAIN" package \
+# Local sibling crates may have versions that have not been published to
+# crates.io yet. Patch those path dependencies for the package verification
+# command while keeping the packaged manifest registry-compatible.
+package_config_args=()
+declare -A patched_dependencies=()
+for package in "${packages[@]}"; do
+    while IFS=$'\t' read -r dependency_name dependency_path; do
+        [ -n "$dependency_name" ] || continue
+        [ -n "$dependency_path" ] || continue
+        [ -d "$dependency_path" ] || continue
+        if [ -z "${patched_dependencies[$dependency_name]+x}" ]; then
+            package_config_args+=(
+                --config
+                "patch.crates-io.${dependency_name}.path=\"$dependency_path\""
+            )
+            patched_dependencies["$dependency_name"]="$dependency_path"
+        fi
+    done < <(
+        jq -r --arg package "$package" '
+            .packages[]
+            | select(.name == $package)
+            | .dependencies[]
+            | select(.path != null)
+            | [.name, .path]
+            | @tsv
+        ' <<< "$metadata"
+    )
+done
+
+if cargo +"$RS_CI_BUILD_TOOLCHAIN" "${package_config_args[@]}" package \
     "${package_args[@]}" \
     --allow-dirty; then
     :
