@@ -8,7 +8,7 @@
 #
 ################################################################################
 
-# Purpose: Scan one Rust file for test attributes that must stay out of src/.
+# Purpose: Scan one Rust file for test attributes that identify test code.
 scan_test_attributes() {
     local file="$1"
 
@@ -25,9 +25,11 @@ scan_test_attributes() {
     ' "$file"
 }
 
-# Purpose: Enforce that source files do not contain inline test attributes.
+# Purpose: Enforce that production source files do not contain inline test
+# attributes while allowing the dedicated crate-internal src/tests tree.
 check_inline_tests() {
     local source_root="$1"
+    local internal_test_root="${2:-$source_root/tests}"
     local file
     local rel_path
     local hit
@@ -43,6 +45,16 @@ check_inline_tests() {
     while IFS= read -r file; do
         rel_path="${file#$PROJECT_ROOT/}"
         is_extra_excluded "$rel_path" && continue
+        case "$file" in
+            "$internal_test_root"/*)
+                continue
+                ;;
+        esac
+        if [ "$(basename "$file")" = "lib.rs" ] \
+            && grep -Eq '^#\[[[:space:]]*cfg[[:space:]]*\([[:space:]]*test[[:space:]]*\)[[:space:]]*\][[:space:]]*$' "$file" \
+            && grep -Eq '^mod[[:space:]]+tests[[:space:]]*;' "$file"; then
+            continue
+        fi
         has_style_allow "$file" "inline-tests" && continue
 
         while IFS= read -r hit; do
@@ -53,6 +65,15 @@ check_inline_tests() {
                 "test code must live under '$STYLE_TEST_DIR/'; found $attr in source"
         done < <(scan_test_attributes "$file")
     done < <(list_rs_files "$source_root")
+}
+
+# Purpose: Validate both external tests/ and crate-internal src/tests/ trees.
+check_all_test_file_names() {
+    local external_test_root="$1"
+    local internal_test_root="$2"
+
+    check_test_file_names "$external_test_root"
+    check_test_file_names "$internal_test_root"
 }
 
 # Purpose: Enforce naming conventions for files under the tests directory.
@@ -81,6 +102,15 @@ check_test_file_names() {
                 ;;
         esac
     done < <(list_rs_files "$test_root")
+}
+
+# Purpose: Reject source redirections in both test trees.
+check_all_test_redirects() {
+    local external_test_root="$1"
+    local internal_test_root="$2"
+
+    check_test_redirects "$external_test_root"
+    check_test_redirects "$internal_test_root"
 }
 
 # Purpose: Scan one Rust test file for source redirections that hide real tests.
@@ -212,11 +242,16 @@ check_source_test_pairs() {
     while IFS= read -r file; do
         rel_path="${file#$PROJECT_ROOT/}"
         is_extra_excluded "$rel_path" && continue
+        src_rel_path="${file#$source_root/}"
+        case "$src_rel_path" in
+            tests/*)
+                continue
+                ;;
+        esac
         [[ "$rel_path" =~ $STYLE_SKIP_SOURCE_TEST_PAIR_PATH_REGEX ]] && continue
         has_style_allow "$file" "source-test-pair" && continue
         is_type_alias_only_file "$file" && continue
 
-        src_rel_path="${file#$source_root/}"
         base_name=$(basename "$src_rel_path")
         case "$base_name" in
             *_tests.rs)

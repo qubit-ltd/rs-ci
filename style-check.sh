@@ -94,10 +94,11 @@ print_usage() {
 run_style_checks() {
     local source_root="$1"
     local test_root="$2"
+    local internal_test_root="$source_root/tests"
 
-    check_inline_tests "$source_root"
-    check_test_file_names "$test_root"
-    check_test_redirects "$test_root"
+    check_inline_tests "$source_root" "$internal_test_root"
+    check_all_test_file_names "$test_root" "$internal_test_root"
+    check_all_test_redirects "$test_root" "$internal_test_root"
     check_source_test_pairs "$source_root" "$test_root"
     check_public_type_files "$source_root"
     check_aggregation_files "$source_root" "$test_root"
