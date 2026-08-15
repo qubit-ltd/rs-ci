@@ -232,6 +232,26 @@ class CiCheckScriptTests(unittest.TestCase):
         self.assertNotIn('2b/12 Running Clippy checks', script)
         self.assertIn('2b/15 Running Clippy checks', script)
 
+    def test_ci_check_runs_default_and_all_feature_tests(self) -> None:
+        script = CI_CHECK_SCRIPT.read_text(encoding="utf-8")
+
+        default_step = script.index(
+            'print_step "5/15 Running default-feature tests '
+        )
+        all_feature_step = script.index(
+            'print_step "5b/15 Running all-feature tests '
+        )
+
+        self.assertLess(default_step, all_feature_step)
+        self.assertIn(
+            'cargo +"$RS_CI_BUILD_TOOLCHAIN" test --verbose',
+            script[default_step:all_feature_step],
+        )
+        self.assertIn(
+            'cargo +"$RS_CI_BUILD_TOOLCHAIN" test --all-features --verbose',
+            script[all_feature_step:],
+        )
+
     def test_ci_check_runs_conditional_loom_after_fuzz(self) -> None:
         script = CI_CHECK_SCRIPT.read_text(encoding="utf-8")
 
@@ -254,7 +274,7 @@ class CiCheckScriptTests(unittest.TestCase):
         script = CI_CHECK_SCRIPT.read_text(encoding="utf-8")
 
         test_step = script.index(
-            'print_step "5/15 Running tests '
+            'print_step "5b/15 Running all-feature tests '
         )
         miri_step = script.index(
             'print_step "6/15 Running conditional Miri checks"'

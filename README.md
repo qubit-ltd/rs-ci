@@ -363,10 +363,10 @@ are defined in `toolchains.sh`.
 - `RUN_COVERAGE_CFG_CLIPPY`: set to `1` to run clippy with `RUSTFLAGS="--cfg coverage"`.
 - `RUN_COVERAGE_IN_ALIGN`: set to `1` to run `coverage.sh json` from `align-ci.sh`; defaults to `0`.
 - `STYLE_SOURCE_DIR`: explicit source directory checked by `style-check.sh`; setting it opts into legacy single-directory mode.
-- `STYLE_TEST_DIR`: explicit test directory checked by `style-check.sh`; setting it opts into legacy single-directory mode. When neither directory is set, all Cargo workspace default members use their package-relative `src` and `tests` directories.
-- `STYLE_ENFORCE_INLINE_TESTS`: set to `0` to allow `#[cfg(test)]` or `#[test]` in source files; defaults to `1`.
+- `STYLE_TEST_DIR`: explicit external-test directory checked by `style-check.sh`; setting it opts into legacy single-directory mode. The crate-internal test directory is derived as `STYLE_SOURCE_DIR/tests`. When neither directory is set, all Cargo workspace default members use their package-relative `src`, `src/tests`, and `tests` directories.
+- `STYLE_ENFORCE_INLINE_TESTS`: set to `1` to reject `#[cfg(test)]` or `#[test]` in production source files; defaults to `0` because tests that require private access may remain inline.
 - `STYLE_ENFORCE_TEST_FILE_NAMES`: set to `0` to disable test file naming checks; defaults to `1`.
-- `STYLE_ENFORCE_SOURCE_TEST_PAIRS`: set to `0` to allow concrete source files without matching `*_tests.rs` files; defaults to `1`.
+- `STYLE_ENFORCE_SOURCE_TEST_PAIRS`: set to `1` to enable the legacy source/test-pair heuristic, which accepts an exact external mirror, another external test with the same file name, a source sibling, or a tested parent module. It defaults to `0` because the tiered policy must choose between external, crate-internal, and inline tests from behavior and visibility rather than file names alone.
 - `STYLE_ENFORCE_PUBLIC_TYPE_FILES`: set to `0` to disable public type file layout checks; defaults to `1`.
 - `STYLE_ENFORCE_EXPLICIT_IMPORTS`: set to `0` to allow wildcard imports and aggregation-only `mod.rs` private imports; defaults to `1`.
 - `STYLE_ENFORCE_AGGREGATION_FILES`: set to `0` to allow `lib.rs` and `mod.rs` to define items such as structs, traits, functions, impls, or macros; defaults to `1`.

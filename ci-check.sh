@@ -259,7 +259,16 @@ else
 fi
 echo ""
 
-print_step "5/15 Running tests (cargo +$RS_CI_BUILD_TOOLCHAIN test --all-features)"
+print_step "5/15 Running default-feature tests (cargo +$RS_CI_BUILD_TOOLCHAIN test)"
+if cargo +"$RS_CI_BUILD_TOOLCHAIN" test --verbose; then
+    print_success "Default-feature tests passed"
+else
+    print_error "Default-feature tests failed"
+    exit 1
+fi
+echo ""
+
+print_step "5b/15 Running all-feature tests (cargo +$RS_CI_BUILD_TOOLCHAIN test --all-features)"
 if cargo +"$RS_CI_BUILD_TOOLCHAIN" test --all-features --verbose; then
     print_success "All tests passed"
 else

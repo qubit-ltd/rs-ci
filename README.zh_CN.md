@@ -334,10 +334,10 @@ Cargo 命令之前拒绝浮动的 `nightly`，共享默认值统一定义在 `to
 - `RUN_COVERAGE_CFG_CLIPPY`：设为 `1` 时，使用 `RUSTFLAGS="--cfg coverage"` 运行 clippy。
 - `RUN_COVERAGE_IN_ALIGN`：设为 `1` 时，从 `align-ci.sh` 运行 `coverage.sh json`；默认是 `0`。
 - `STYLE_SOURCE_DIR`：`style-check.sh` 显式检查的源码目录；设置后进入兼容的单目录模式。
-- `STYLE_TEST_DIR`：`style-check.sh` 显式检查的测试目录；设置后进入兼容的单目录模式。两者均未设置时，对 Cargo workspace default members 使用各 package 内的 `src` 与 `tests` 目录。
-- `STYLE_ENFORCE_INLINE_TESTS`：设为 `0` 时允许在源码文件中使用 `#[cfg(test)]` 或 `#[test]`；默认是 `1`。
+- `STYLE_TEST_DIR`：`style-check.sh` 显式检查的外部测试目录；设置后进入兼容的单目录模式。crate 内部测试目录由 `STYLE_SOURCE_DIR/tests` 推导。两者均未设置时，对 Cargo workspace default members 使用各 package 内的 `src`、`src/tests` 与 `tests` 目录。
+- `STYLE_ENFORCE_INLINE_TESTS`：设为 `1` 时禁止在生产源码文件中使用 `#[cfg(test)]` 或 `#[test]`；默认是 `0`，因为必须访问私有项的测试可以保留为内嵌测试。
 - `STYLE_ENFORCE_TEST_FILE_NAMES`：设为 `0` 时关闭测试文件命名检查；默认是 `1`。
-- `STYLE_ENFORCE_SOURCE_TEST_PAIRS`：设为 `0` 时允许具体源码文件没有对应的 `*_tests.rs` 文件；默认是 `1`。
+- `STYLE_ENFORCE_SOURCE_TEST_PAIRS`：设为 `1` 时启用旧版源码/测试配对启发式检查；该检查接受精确的外部镜像、外部测试树中的同名文件、源码同级测试或已测试的父模块。默认是 `0`，因为新的分层规范需要根据行为与可见性在外部、crate 内部和内嵌测试之间选择，不能仅由文件名判断。
 - `STYLE_ENFORCE_PUBLIC_TYPE_FILES`：设为 `0` 时关闭公开类型文件布局检查；默认是 `1`。
 - `STYLE_ENFORCE_EXPLICIT_IMPORTS`：设为 `0` 时允许通配导入和纯聚合型 `mod.rs` 中的私有导入；默认是 `1`。
 - `STYLE_ENFORCE_AGGREGATION_FILES`：设为 `0` 时允许 `lib.rs` 和 `mod.rs` 定义结构体、trait、函数、impl 或宏等具体条目；默认是 `1`。
