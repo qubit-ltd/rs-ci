@@ -36,6 +36,9 @@ STYLE_TEST_SUPPORT_DIR_REGEX="${STYLE_TEST_SUPPORT_DIR_REGEX:-(^|/)(support|comm
 FAILURES=0
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+# shellcheck source=toolchains.sh
+source "$script_dir/toolchains.sh"
+configure_rs_ci_toolchains
 source "$script_dir/style/common.sh"
 source "$script_dir/style/rules/tests.sh"
 source "$script_dir/style/rules/types.sh"
@@ -189,7 +192,7 @@ run_workspace_style_checks() {
 
     require_command cargo
     require_command jq
-    metadata=$(cargo metadata --no-deps --format-version 1)
+    metadata=$(cargo +"$RS_CI_BUILD_TOOLCHAIN" metadata --no-deps --format-version 1)
     package_rows=$(jq -r '
         . as $metadata
         | .workspace_default_members[] as $member_id

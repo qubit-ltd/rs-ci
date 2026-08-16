@@ -354,7 +354,9 @@ echo ""
 print_step "11/15 Checking README dependency versions"
 require_command python3
 require_executable_file "$SCRIPT_DIR/readme-version-check.py"
-RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/readme-version-check.py"
+RS_CI_PROJECT_ROOT="$PROJECT_ROOT" \
+    RUSTUP_TOOLCHAIN="$RS_CI_BUILD_TOOLCHAIN" \
+    "$SCRIPT_DIR/readme-version-check.py"
 print_success "README dependency versions passed"
 echo ""
 

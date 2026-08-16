@@ -895,7 +895,7 @@ METADATA_PATH="$COVERAGE_TEMP_DIR/metadata.json"
 CONFIG_PATH="$COVERAGE_TEMP_DIR/config.json"
 PLAN_PATH="$COVERAGE_TEMP_DIR/plan.json"
 
-if ! cargo metadata --no-deps --format-version 1 \
+if ! cargo +"$RS_CI_BUILD_TOOLCHAIN" metadata --no-deps --format-version 1 \
     --manifest-path "$PROJECT_ROOT/Cargo.toml" > "$METADATA_PATH"; then
     echo "error: cargo metadata failed for $PROJECT_ROOT/Cargo.toml" >&2
     exit 1
