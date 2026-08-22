@@ -30,10 +30,18 @@ class CargoMiriCheckTests(unittest.TestCase):
             textwrap.dedent(
                 """\
                 #!/bin/sh
-                if [ "${1:-}" = "metadata" ]; then
-                    cat "$FAKE_CARGO_METADATA"
-                    exit 0
-                fi
+                case "${1:-}" in
+                    metadata)
+                        cat "$FAKE_CARGO_METADATA"
+                        exit 0
+                        ;;
+                    +*)
+                        if [ "${2:-}" = "metadata" ]; then
+                            cat "$FAKE_CARGO_METADATA"
+                            exit 0
+                        fi
+                        ;;
+                esac
                 printf '%s\n' "$*" >> "$FAKE_CARGO_LOG"
                 exit "${FAKE_MIRI_STATUS:-0}"
                 """

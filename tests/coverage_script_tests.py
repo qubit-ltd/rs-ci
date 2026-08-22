@@ -93,14 +93,29 @@ def write_fake_tools(bin_dir: Path, log_path: Path) -> None:
         textwrap.dedent(
             f"""\
             #!/bin/sh
-            if [ "${{1:-}}" = "metadata" ]; then
+            if [ "${{1:-}}" = metadata ]; then
                 cat "$FAKE_CARGO_METADATA"
                 exit "${{FAKE_METADATA_STATUS:-0}}"
             fi
-            if [ "${{1:-}}" = "llvm-cov" ] && [ "${{2:-}}" = "--version" ]; then
-                echo "cargo-llvm-cov ${{FAKE_CARGO_LLVM_COV_VERSION:-0.8.5}}"
+            if [ "${{1:-}}" = llvm-cov ] && [ "${{2:-}}" = --version ]; then
+                echo "cargo-llvm-cov ${{FAKE_CARGO_LLVM_COV_VERSION:-0.8.6}}"
                 exit 0
             fi
+            case "${{1:-}}" in
+                +*)
+                    toolchain="$1"
+                    shift
+                    if [ "${{1:-}}" = metadata ]; then
+                        cat "$FAKE_CARGO_METADATA"
+                        exit "${{FAKE_METADATA_STATUS:-0}}"
+                    fi
+                    if [ "${{1:-}}" = llvm-cov ] && [ "${{2:-}}" = --version ]; then
+                        echo "cargo-llvm-cov ${{FAKE_CARGO_LLVM_COV_VERSION:-0.8.6}}"
+                        exit 0
+                    fi
+                    set -- "$toolchain" "$@"
+                    ;;
+            esac
             printf 'LLVM_COV=%s\\n' "${{LLVM_COV-<unset>}}" >> "{log_path}"
             printf 'LLVM_PROFDATA=%s\\n' "${{LLVM_PROFDATA-<unset>}}" >> "{log_path}"
             printf 'ARGS=%s\\n' "$*" >> "{log_path}"
@@ -303,7 +318,7 @@ class CoverageScriptTests(unittest.TestCase):
 
             self.assertNotEqual(result.returncode, 0, result.stdout)
             self.assertIn(
-                "per-source coverage thresholds failed",
+                "crate-wide coverage thresholds failed",
                 result.stderr,
             )
 

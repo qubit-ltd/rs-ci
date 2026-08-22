@@ -61,7 +61,7 @@ configure_rs_ci_toolchains() {
 require_rs_ci_cargo_llvm_cov() {
     local installed_version
 
-    if ! installed_version=$(cargo llvm-cov --version 2> /dev/null); then
+    if ! installed_version=$(cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov --version 2> /dev/null); then
         echo "error: cargo-llvm-cov $CARGO_LLVM_COV_VERSION is required" >&2
         return 1
     fi

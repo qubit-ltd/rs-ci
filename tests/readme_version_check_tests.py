@@ -43,6 +43,7 @@ def write_project(
 def run_checker(root: Path) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["RS_CI_PROJECT_ROOT"] = str(root)
+    env["RUSTUP_TOOLCHAIN"] = "1.94.0"
     return subprocess.run(
         [sys.executable, str(CHECKER)],
         cwd=root,
