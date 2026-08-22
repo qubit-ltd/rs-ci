@@ -98,6 +98,34 @@ class StyleCheckScriptTests(unittest.TestCase):
             env=environment,
         )
 
+    def run_aggregation_style_check(
+        self,
+        project_root: Path,
+    ) -> subprocess.CompletedProcess[str]:
+        environment = os.environ.copy()
+        environment.update(
+            {
+                "RS_CI_PROJECT_ROOT": str(project_root),
+                "STYLE_SOURCE_DIR": "src",
+                "STYLE_TEST_DIR": "tests",
+                "STYLE_ENFORCE_INLINE_TESTS": "0",
+                "STYLE_ENFORCE_TEST_FILE_NAMES": "0",
+                "STYLE_ENFORCE_TEST_REDIRECTS": "0",
+                "STYLE_ENFORCE_SOURCE_TEST_PAIRS": "0",
+                "STYLE_ENFORCE_PUBLIC_TYPE_FILES": "0",
+                "STYLE_ENFORCE_AGGREGATION_FILES": "1",
+                "STYLE_ENFORCE_COVERAGE_CFG": "0",
+                "STYLE_ENFORCE_EXPLICIT_IMPORTS": "0",
+            }
+        )
+        return subprocess.run(
+            ["bash", str(STYLE_CHECK_SCRIPT)],
+            text=True,
+            capture_output=True,
+            check=False,
+            env=environment,
+        )
+
     def test_import_style_rules_reject_invalid_imports(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project_root = Path(temp_dir)
@@ -215,7 +243,7 @@ class StyleCheckScriptTests(unittest.TestCase):
 
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
-    def test_source_test_pairs_are_enabled_by_default(self) -> None:
+    def test_source_test_pairs_are_disabled_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project_root = Path(temp_dir)
             (project_root / "src").mkdir()
@@ -227,10 +255,9 @@ class StyleCheckScriptTests(unittest.TestCase):
 
             result = self.run_source_test_pair_check(project_root, None)
 
-        self.assertEqual(1, result.returncode)
-        self.assertIn("missing corresponding test file", result.stdout)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
-    def test_source_test_pairs_can_be_disabled_explicitly(self) -> None:
+    def test_source_test_pairs_can_be_enabled_explicitly(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project_root = Path(temp_dir)
             (project_root / "src").mkdir()
@@ -240,9 +267,105 @@ class StyleCheckScriptTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            result = self.run_source_test_pair_check(project_root, "0")
+            result = self.run_source_test_pair_check(project_root, "1")
+
+        self.assertEqual(1, result.returncode)
+        self.assertIn("missing corresponding test file", result.stdout)
+
+    def test_internal_and_inline_tests_are_allowed_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir)
+            (project_root / "src" / "tests").mkdir(parents=True)
+            (project_root / "tests").mkdir()
+            (project_root / "Cargo.toml").write_text(
+                '[package]\nname = "tiered-tests"\nversion = "0.1.0"\n'
+                'edition = "2024"\n',
+                encoding="utf-8",
+            )
+            (project_root / "src" / "lib.rs").write_text(
+                "#[cfg(test)]\nmod tests;\n\n"
+                "#[cfg(test)]\nmod private_tests {\n"
+                "    #[test]\n    fn test_private_contract() {}\n}\n",
+                encoding="utf-8",
+            )
+            (project_root / "src" / "tests" / "mod.rs").write_text(
+                "mod widget_tests;\n",
+                encoding="utf-8",
+            )
+            (project_root / "src" / "tests" / "widget_tests.rs").write_text(
+                "pub struct FirstHelper;\n"
+                "pub struct SecondHelper;\n\n"
+                "#[test]\nfn test_crate_contract() {}\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_style_check(project_root)
 
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    def test_internal_tests_must_be_cfg_test_gated(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir)
+            (project_root / "src" / "tests").mkdir(parents=True)
+            (project_root / "tests").mkdir()
+            (project_root / "Cargo.toml").write_text(
+                '[package]\nname = "ungated-tests"\nversion = "0.1.0"\n'
+                'edition = "2024"\n',
+                encoding="utf-8",
+            )
+            (project_root / "src" / "lib.rs").write_text(
+                "pub mod tests;\n",
+                encoding="utf-8",
+            )
+            (project_root / "src" / "tests" / "mod.rs").write_text(
+                "pub struct FirstProductionType;\n"
+                "pub struct SecondProductionType;\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_style_check(project_root)
+
+        self.assertEqual(1, result.returncode)
+        self.assertIn(
+            "src/tests must be connected from the crate root with "
+            "#[cfg(test)] mod tests;",
+            result.stdout,
+        )
+
+    def test_aggregation_rule_does_not_treat_cfg_not_test_as_test_code(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir)
+            (project_root / "src").mkdir()
+            (project_root / "tests").mkdir()
+            (project_root / "src" / "lib.rs").write_text(
+                "#[cfg(not(test))]\nmod production {\n"
+                "    pub fn production_function() {}\n}\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_aggregation_style_check(project_root)
+
+        self.assertEqual(1, result.returncode)
+        self.assertIn("production_function", result.stdout)
+
+    def test_inline_test_string_braces_do_not_hide_production_items(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir)
+            (project_root / "src").mkdir()
+            (project_root / "tests").mkdir()
+            (project_root / "src" / "lib.rs").write_text(
+                "#[cfg(test)]\nmod private_tests {\n"
+                "    #[test]\n    fn test_brace_input() {\n"
+                '        assert_eq!("{", "{");\n'
+                "    }\n}\n\n"
+                "pub fn production_function() {}\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_aggregation_style_check(project_root)
+
+        self.assertEqual(1, result.returncode)
+        self.assertIn("production_function", result.stdout)
 
     def test_workspace_default_members_are_checked(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -267,10 +390,10 @@ class StyleCheckScriptTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (project_root / "member" / "src" / "lib.rs").write_text(
-                "mod widget;\n",
+                "mod misnamed;\n",
                 encoding="utf-8",
             )
-            (project_root / "member" / "src" / "widget.rs").write_text(
+            (project_root / "member" / "src" / "misnamed.rs").write_text(
                 "pub struct Widget;\n",
                 encoding="utf-8",
             )
@@ -278,7 +401,7 @@ class StyleCheckScriptTests(unittest.TestCase):
             result = self.run_style_check(project_root)
 
         self.assertEqual(1, result.returncode)
-        self.assertIn("member/src/widget.rs", result.stdout)
+        self.assertIn("member/src/misnamed.rs", result.stdout)
 
     def test_parent_module_test_covers_internal_source_files(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -298,7 +421,7 @@ class StyleCheckScriptTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            result = self.run_source_test_pair_check(project_root, None)
+            result = self.run_source_test_pair_check(project_root, "1")
 
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 

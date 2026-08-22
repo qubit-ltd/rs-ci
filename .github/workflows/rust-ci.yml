@@ -193,6 +193,7 @@ jobs:
       - fast_checks
       - resolve_toolchains
     env:
+      RS_CI_BUILD_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.build }}
       RS_CI_MIRI_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.miri }}
 
     steps:
@@ -201,6 +202,9 @@ jobs:
         with:
           fetch-depth: 1
           submodules: recursive
+
+      - name: Install Rust build toolchain
+        run: rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
 
       - name: Detect Miri configuration
         id: miri
@@ -290,6 +294,7 @@ jobs:
       - fast_checks
       - resolve_toolchains
     env:
+      RS_CI_BUILD_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.build }}
       RS_CI_SANITIZER_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.sanitizer }}
 
     steps:
@@ -298,6 +303,9 @@ jobs:
         with:
           fetch-depth: 1
           submodules: recursive
+
+      - name: Install Rust build toolchain
+        run: rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
 
       - name: Detect sanitizer configuration
         id: sanitizer
@@ -671,9 +679,9 @@ jobs:
         run: |
           set -euo pipefail
           if [ -x .rs-ci/readme-version-check.py ]; then
-            python3 .rs-ci/readme-version-check.py
+            RUSTUP_TOOLCHAIN="$RS_CI_BUILD_TOOLCHAIN" python3 .rs-ci/readme-version-check.py
           elif [ -x ./readme-version-check.py ]; then
-            python3 ./readme-version-check.py
+            RUSTUP_TOOLCHAIN="$RS_CI_BUILD_TOOLCHAIN" python3 ./readme-version-check.py
           else
             echo "readme-version-check.py was not found" >&2
             exit 1

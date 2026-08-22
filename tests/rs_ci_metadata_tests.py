@@ -39,11 +39,16 @@ class RsCiMetadataTests(unittest.TestCase):
         self.bin_dir = Path(self.temp_dir.name) / "bin"
         self.bin_dir.mkdir()
         self.metadata_file = Path(self.temp_dir.name) / "metadata.json"
+        self.command_log = Path(self.temp_dir.name) / "cargo.log"
         cargo = self.bin_dir / "cargo"
         cargo.write_text(
             textwrap.dedent(
                 """\
                 #!/bin/sh
+                printf '%s\\n' "$*" >> "$FAKE_CARGO_LOG"
+                case "${1:-}" in
+                    +*) shift ;;
+                esac
                 if [ "${1:-}" = "metadata" ]; then
                     cat "$FAKE_CARGO_METADATA"
                     exit "${FAKE_METADATA_STATUS:-0}"
@@ -71,7 +76,9 @@ class RsCiMetadataTests(unittest.TestCase):
         env = os.environ.copy()
         env["PATH"] = f"{self.bin_dir}{os.pathsep}{env['PATH']}"
         env["FAKE_CARGO_METADATA"] = str(self.metadata_file)
+        env["FAKE_CARGO_LOG"] = str(self.command_log)
         env["RS_CI_PROJECT_ROOT"] = str(self.root)
+        env["RS_CI_BUILD_TOOLCHAIN"] = "1.94.0"
         return subprocess.run(
             ["bash", str(METADATA_SCRIPT), command, *arguments],
             cwd="/",
@@ -116,6 +123,25 @@ class RsCiMetadataTests(unittest.TestCase):
 
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(["member"], result.stdout.splitlines())
+
+    def test_uses_the_configured_build_toolchain_for_cargo_metadata(self) -> None:
+        package_id = "demo 0.1.0 (path+file:///demo)"
+
+        result = self.run_metadata(
+            "miri-packages",
+            metadata=self.metadata(
+                [package(self.root, "demo", package_id)],
+                [package_id],
+            ),
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertTrue(self.command_log.exists())
+        self.assertTrue(
+            self.command_log.read_text(encoding="utf-8").startswith(
+                "+1.94.0 metadata "
+            )
+        )
 
     def test_absent_metadata_produces_empty_lists(self) -> None:
         package_id = "demo 0.1.0 (path+file:///demo)"

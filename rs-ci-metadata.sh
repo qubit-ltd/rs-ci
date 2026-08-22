@@ -47,13 +47,17 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
 MANIFEST_PATH="$PROJECT_ROOT/Cargo.toml"
 
+# shellcheck source=toolchains.sh
+source "$SCRIPT_DIR/toolchains.sh"
+configure_rs_ci_toolchains
+
 if [ ! -f "$MANIFEST_PATH" ]; then
     echo "error: Cargo.toml not found at '$MANIFEST_PATH'" >&2
     exit 2
 fi
 
 set +e
-RAW_METADATA=$(cargo metadata \
+RAW_METADATA=$(cargo +"$RS_CI_BUILD_TOOLCHAIN" metadata \
     --no-deps \
     --format-version 1 \
     --manifest-path "$MANIFEST_PATH")

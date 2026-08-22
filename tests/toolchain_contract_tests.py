@@ -56,6 +56,73 @@ class ToolchainContractTests(unittest.TestCase):
                 self.assertNotIn("${RUST_TOOLCHAIN:-", script)
                 self.assertNotRegex(script, r"nightly-\d{4}-\d{2}-\d{2}")
 
+    def test_metadata_entrypoints_use_the_configured_build_toolchain(self) -> None:
+        coverage_script = (REPO_ROOT / "coverage.sh").read_text(encoding="utf-8")
+        metadata_script = (REPO_ROOT / "rs-ci-metadata.sh").read_text(
+            encoding="utf-8"
+        )
+        style_script = (REPO_ROOT / "style-check.sh").read_text(
+            encoding="utf-8"
+        )
+        ci_script = (REPO_ROOT / "ci-check.sh").read_text(encoding="utf-8")
+
+        self.assertIn(
+            'cargo +"$RS_CI_BUILD_TOOLCHAIN" metadata',
+            coverage_script,
+        )
+        self.assertIn(
+            'cargo +"$RS_CI_BUILD_TOOLCHAIN" metadata',
+            metadata_script,
+        )
+        self.assertIn(
+            'cargo +"$RS_CI_BUILD_TOOLCHAIN" metadata',
+            style_script,
+        )
+        self.assertIn(
+            'RUSTUP_TOOLCHAIN="$RS_CI_BUILD_TOOLCHAIN"',
+            ci_script,
+        )
+
+    def test_miri_and_sanitizer_jobs_install_build_toolchain_before_detection(
+        self,
+    ) -> None:
+        workflow = GITHUB_WORKFLOW.read_text(encoding="utf-8")
+
+        for job_name, detection_step in (
+            ("miri", "Detect Miri configuration"),
+            ("sanitizers", "Detect sanitizer configuration"),
+        ):
+            with self.subTest(job=job_name):
+                job = self.extract_workflow_job(workflow, job_name)
+                self.assertIn(
+                    "RS_CI_BUILD_TOOLCHAIN: "
+                    "${{ needs.resolve_toolchains.outputs.build }}",
+                    job,
+                )
+                install_index = job.index("Install Rust build toolchain")
+                detect_index = job.index(detection_step)
+                self.assertLess(install_index, detect_index)
+                self.assertIn(
+                    'rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" '
+                    "--profile minimal",
+                    job,
+                )
+
+    def test_coverage_job_runs_readme_check_with_build_toolchain(self) -> None:
+        workflow = GITHUB_WORKFLOW.read_text(encoding="utf-8")
+        coverage_job = self.extract_workflow_job(workflow, "build_test_coverage")
+
+        self.assertIn(
+            'RUSTUP_TOOLCHAIN="$RS_CI_BUILD_TOOLCHAIN" '
+            "python3 .rs-ci/readme-version-check.py",
+            coverage_job,
+        )
+        self.assertIn(
+            'RUSTUP_TOOLCHAIN="$RS_CI_BUILD_TOOLCHAIN" '
+            "python3 ./readme-version-check.py",
+            coverage_job,
+        )
+
     def test_workflow_resolves_versions_from_the_shared_contract(self) -> None:
         workflow = GITHUB_WORKFLOW.read_text(encoding="utf-8")
 
@@ -110,6 +177,18 @@ class ToolchainContractTests(unittest.TestCase):
         self.assertIn('group_imports = "StdExternalCrate"', config)
         self.assertIn("reorder_imports = true", config)
         self.assertNotIn("imports_layout", config)
+
+    @staticmethod
+    def extract_workflow_job(workflow: str, job_name: str) -> str:
+        pattern = re.compile(
+            rf"^  {re.escape(job_name)}:\n"
+            rf"(.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)",
+            re.MULTILINE | re.DOTALL,
+        )
+        match = pattern.search(workflow)
+        if match is None:
+            raise AssertionError(f"workflow job {job_name!r} not found")
+        return match.group(0)
 
 
 if __name__ == "__main__":
