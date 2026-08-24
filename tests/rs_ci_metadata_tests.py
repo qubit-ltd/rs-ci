@@ -124,6 +124,45 @@ class RsCiMetadataTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(["member"], result.stdout.splitlines())
 
+    def test_lists_miri_test_arguments_for_enabled_packages(self) -> None:
+        package_id = "demo 0.1.0 (path+file:///demo)"
+        result = self.run_metadata(
+            "miri-configs",
+            metadata=self.metadata(
+                [
+                    package(
+                        self.root,
+                        "demo",
+                        package_id,
+                        {
+                            "miri": True,
+                            "miri-test-args": [
+                                "--test",
+                                "tests",
+                                "tree::json_tree_mutator_tests",
+                            ],
+                        },
+                    )
+                ],
+                [package_id],
+            ),
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(
+            [
+                {
+                    "name": "demo",
+                    "test_args": [
+                        "--test",
+                        "tests",
+                        "tree::json_tree_mutator_tests",
+                    ],
+                }
+            ],
+            [json.loads(line) for line in result.stdout.splitlines()],
+        )
+
     def test_uses_the_configured_build_toolchain_for_cargo_metadata(self) -> None:
         package_id = "demo 0.1.0 (path+file:///demo)"
 
@@ -203,6 +242,33 @@ class RsCiMetadataTests(unittest.TestCase):
         self.assertNotIn(result.returncode, (0, 1))
         self.assertIn("miri", result.stderr)
         self.assertIn("boolean", result.stderr)
+
+    def test_rejects_invalid_miri_test_arguments(self) -> None:
+        package_id = "demo 0.1.0 (path+file:///demo)"
+        invalid_values = ("--lib", ["--test", 7])
+
+        for test_args in invalid_values:
+            with self.subTest(test_args=test_args):
+                result = self.run_metadata(
+                    "miri-configs",
+                    metadata=self.metadata(
+                        [
+                            package(
+                                self.root,
+                                "demo",
+                                package_id,
+                                {
+                                    "miri": True,
+                                    "miri-test-args": test_args,
+                                },
+                            )
+                        ],
+                        [package_id],
+                    ),
+                )
+
+                self.assertNotIn(result.returncode, (0, 1))
+                self.assertIn("miri-test-args", result.stderr)
 
     def test_rejects_non_array_sanitizers(self) -> None:
         package_id = "demo 0.1.0 (path+file:///demo)"

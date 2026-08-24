@@ -248,6 +248,7 @@ checks without installing an additional nightly toolchain:
 ```toml
 [package.metadata.rs-ci]
 miri = true
+miri-test-args = ["--test", "integration", "critical_module::tests"]
 sanitizers = ["address"]
 ```
 
@@ -255,6 +256,10 @@ Configuration is package-scoped. In a workspace, only packages that explicitly
 set `miri = true` run under Miri, and only packages listing `"address"` run
 under AddressSanitizer. Invalid field types, duplicate entries, and unsupported
 sanitizer names are configuration errors rather than silent skips.
+
+By default, Miri runs the package's complete all-feature test suite. An opted-in
+package can set `miri-test-args` to append Cargo test-selection arguments, which
+keeps Miri focused on tests that exercise unsafe or otherwise sensitive code.
 
 Both `ci-check.sh` and the reusable GitHub workflow delegate execution to the
 same checker scripts. The GitHub workflow exposes `miri_toolchain` and

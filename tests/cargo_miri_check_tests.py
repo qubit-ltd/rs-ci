@@ -129,6 +129,25 @@ class CargoMiriCheckTests(unittest.TestCase):
             self.command_log.read_text(encoding="utf-8"),
         )
 
+    def test_appends_configured_miri_test_arguments(self) -> None:
+        result = self.run_checker(
+            rs_ci={
+                "miri": True,
+                "miri-test-args": [
+                    "--test",
+                    "tests",
+                    "tree::json tree mutator tests",
+                ],
+            }
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(
+            "+nightly-2099-01-01 miri test --all-features --package demo "
+            "--test tests tree::json tree mutator tests\n",
+            self.command_log.read_text(encoding="utf-8"),
+        )
+
     def test_propagates_miri_failure(self) -> None:
         result = self.run_checker(rs_ci={"miri": True}, status=7)
 

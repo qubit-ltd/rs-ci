@@ -40,22 +40,22 @@ source "$SCRIPT_DIR/toolchains.sh"
 configure_rs_ci_toolchains
 
 set +e
-PACKAGE_OUTPUT=$(RS_CI_PROJECT_ROOT="$PROJECT_ROOT" \
-    "$METADATA_SCRIPT" miri-packages)
+CONFIG_OUTPUT=$(RS_CI_PROJECT_ROOT="$PROJECT_ROOT" \
+    "$METADATA_SCRIPT" miri-configs)
 METADATA_STATUS=$?
 set -e
 if [ "$METADATA_STATUS" -ne 0 ]; then
     exit "$METADATA_STATUS"
 fi
 
-PACKAGES=()
-while IFS= read -r package; do
-    if [ -n "$package" ]; then
-        PACKAGES+=("$package")
+CONFIGS=()
+while IFS= read -r config; do
+    if [ -n "$config" ]; then
+        CONFIGS+=("$config")
     fi
-done <<< "$PACKAGE_OUTPUT"
+done <<< "$CONFIG_OUTPUT"
 
-if [ "${#PACKAGES[@]}" -eq 0 ]; then
+if [ "${#CONFIGS[@]}" -eq 0 ]; then
     if [ "$DETECT_ONLY" -eq 1 ]; then
         exit 1
     fi
@@ -68,12 +68,18 @@ if [ "$DETECT_ONLY" -eq 1 ]; then
 fi
 
 cd "$PROJECT_ROOT"
-for package in "${PACKAGES[@]}"; do
+for config in "${CONFIGS[@]}"; do
+    package=$(jq -r '.name' <<< "$config")
+    TEST_ARGS=()
+    while IFS= read -r -d '' argument; do
+        TEST_ARGS+=("$argument")
+    done < <(jq -j '.test_args[] | . + "\u0000"' <<< "$config")
     echo "Running Miri for package '$package'"
     PROPTEST_DISABLE_FAILURE_PERSISTENCE=1 \
     PROPTEST_CASES=8 \
     MIRIFLAGS="${MIRIFLAGS:+$MIRIFLAGS }-Zmiri-disable-isolation" \
     cargo +"$RS_CI_MIRI_TOOLCHAIN" miri test \
         --all-features \
-        --package "$package"
+        --package "$package" \
+        "${TEST_ARGS[@]}"
 done

@@ -15,6 +15,7 @@ set -euo pipefail
 
 print_usage() {
     echo "Usage: ./rs-ci-metadata.sh miri-packages" >&2
+    echo "       ./rs-ci-metadata.sh miri-configs" >&2
     echo "       ./rs-ci-metadata.sh sanitizer-packages address" >&2
 }
 
@@ -25,8 +26,9 @@ require_command() {
     fi
 }
 
-if [ "$#" -eq 1 ] && [ "$1" = "miri-packages" ]; then
-    COMMAND="miri-packages"
+if [ "$#" -eq 1 ] \
+    && { [ "$1" = "miri-packages" ] || [ "$1" = "miri-configs" ]; }; then
+    COMMAND="$1"
     SANITIZER=""
 elif [ "$#" -eq 2 ] && [ "$1" = "sanitizer-packages" ]; then
     COMMAND="sanitizer-packages"
@@ -115,6 +117,24 @@ NORMALIZED_METADATA=$(jq -c '
               .
             end
           | (
+              if ($config | has("miri-test-args")) then
+                $config["miri-test-args"]
+              else
+                []
+              end
+            ) as $miri_test_args
+          | if (($miri_test_args | type) != "array") then
+              error(
+                "package \($package.name): rs-ci.miri-test-args must be an array"
+              )
+            elif (all($miri_test_args[]; type == "string") | not) then
+              error(
+                "package \($package.name): rs-ci.miri-test-args entries must be strings"
+              )
+            else
+              .
+            end
+          | (
               if ($config | has("sanitizers")) then
                 $config.sanitizers
               else
@@ -142,6 +162,7 @@ NORMALIZED_METADATA=$(jq -c '
                 name: $package.name,
                 manifest_path: $package.manifest_path,
                 miri: $miri,
+                miri_test_args: $miri_test_args,
                 sanitizers: $sanitizers
               }
             end
@@ -152,6 +173,11 @@ NORMALIZED_METADATA=$(jq -c '
 case "$COMMAND" in
     miri-packages)
         jq -r '.[] | select(.miri) | .name' <<< "$NORMALIZED_METADATA"
+        ;;
+    miri-configs)
+        jq -c \
+            '.[] | select(.miri) | {name, test_args: .miri_test_args}' \
+            <<< "$NORMALIZED_METADATA"
         ;;
     sanitizer-packages)
         jq -r \
