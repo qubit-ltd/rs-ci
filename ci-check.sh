@@ -388,12 +388,11 @@ print_step "14/15 Generating and checking JSON coverage report"
 require_command cargo-llvm-cov
 require_command jq
 ensure_llvm_tools
-# Proc-macro implementation code runs while dependent crates compile, so
-# cargo-llvm-cov cannot observe it from this crate's runtime test process.
-# The compile-test suite remains the behavioral gate; source files are listed
-# as threshold exemptions in .rs-ci-coverage.json for report validation.
-COVERAGE_ENFORCE_THRESHOLDS=0 \
-    RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/coverage.sh" json
+require_executable_file "$SCRIPT_DIR/coverage-threshold-policy-check.sh"
+RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/coverage-threshold-policy-check.sh"
+# Proc-macro code is hard to instrument from this crate's test process.
+# List reviewed exemptions in .rs-ci-coverage.json threshold_exempt_files.
+RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/coverage.sh" json
 print_success "Coverage report passed thresholds"
 echo ""
 

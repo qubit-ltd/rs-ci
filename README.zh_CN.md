@@ -95,11 +95,11 @@ jobs:
 
 可复用 workflow 保留现有格式化、clippy、debug build、doc test、README 依赖版本、
 test、release build、文档、打包验证、审计，以及可选的 Windows 和 macOS 检查。覆盖率通过 `coverage.sh all` 生成，工具是
-`cargo-llvm-cov`，由 `taiki-e/install-action` 安装。可复用 workflow 的
-`coverage_enforce_thresholds` 默认值为 `"0"`，初始接入阶段只报告覆盖率，不因
-阈值失败；调用方可设为 `"1"`，启用与本地 `coverage.sh` 相同的单源码阈值。
-覆盖率发布只使用 GitHub Actions summary、comment 和 artifact，不需要 Codecov
-或 Coveralls token。
+`cargo-llvm-cov`，由 `taiki-e/install-action` 安装。可复用 workflow、本地
+`ci-check.sh` 和 `coverage.sh` 默认都会强制执行单源码阈值。对于已审查的
+proc-macro 或插桩限制，应使用 `.rs-ci-coverage.json` 的
+`threshold_exempt_files`，而不是关闭阈值检查。覆盖率发布只使用 GitHub Actions
+summary、comment 和 artifact，不需要 Codecov 或 Coveralls token。
 
 调用方 workflow 使用 `push`、`pull_request` 或 `workflow_dispatch` 触发时，
 coverage job 会写出 `lcov.info`、`target/llvm-cov/html` 下的 HTML 报告、
@@ -151,7 +151,7 @@ artifact。
 `cargo llvm-cov report` 不接受 `--workspace`。两条路径来自同一份 metadata
 package 计划；阈值检查会按最长匹配规则把每个报告文件归入配置的源码根目录。
 
-调用方 workflow 可以这样启用严格覆盖率：
+调用方 workflow 应保持严格覆盖率开启：
 
 ```yaml
 jobs:
@@ -160,6 +160,10 @@ jobs:
     with:
       coverage_enforce_thresholds: "1"
 ```
+
+`coverage-threshold-policy-check.sh` 会在 `ci-check.sh` 中运行；如果 rs-ci
+脚本或 CI 模板关闭了阈值检查，它会立即失败。rs-ci 还提供
+`tests/coverage_threshold_policy_tests.py`，在 rs-ci 开发过程中守护同一策略。
 
 ## 条件化 cargo-fuzz 检查
 
@@ -345,7 +349,7 @@ Cargo 命令之前拒绝浮动的 `nightly`，共享默认值统一定义在 `to
 - `STYLE_INCLUDE_TYPE_ALIASES`：设为 `1` 时把公开 `type` 别名也纳入文件布局检查；默认是 `0`。
 - `STYLE_EXTRA_EXCLUDE_REGEX`：追加给 `style-check.sh` 的文件排除正则。
 - `STYLE_ALLOWLIST_FILE`：项目级已审核风格例外白名单；默认是 `<project-root>/.qubit-style-allowlist`。
-- `COVERAGE_ENFORCE_THRESHOLDS`：设为 `0` 时禁用单源码文件覆盖率阈值检查；默认是 `1`。
+- `COVERAGE_ENFORCE_THRESHOLDS`：rs-ci 脚本和 CI 模板中必须保持为 `1`；默认是 `1`。除非在 rs-ci 策略测试里同时设置 `RS_CI_ALLOW_DISABLED_COVERAGE_THRESHOLDS=1`，否则不允许关闭阈值检查。
 - `COVERAGE_SCOPE`：覆盖配置文件中的范围，可选 `default-members`、`workspace` 或 `package`。
 - `RS_CI_COVERAGE_CONFIG`：可选 coverage 配置的项目相对或绝对路径；默认是 `.rs-ci-coverage.json`。
 - `COVERAGE_ALL_FEATURES`：设为 `0` 时，coverage 使用 Cargo 默认 feature 选择；默认是 `1`。

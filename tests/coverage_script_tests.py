@@ -703,7 +703,10 @@ class WorkspaceCoverageScriptTests(unittest.TestCase):
                 fake_bin,
                 metadata_path,
                 coverage_path,
-                extra_env={"COVERAGE_ENFORCE_THRESHOLDS": "0"},
+                extra_env={
+                    "COVERAGE_ENFORCE_THRESHOLDS": "0",
+                    "RS_CI_ALLOW_DISABLED_COVERAGE_THRESHOLDS": "1",
+                },
             )
 
             self.assertNotEqual(0, result.returncode)
@@ -765,6 +768,10 @@ class WorkspaceCoverageScriptTests(unittest.TestCase):
         self.assertIn(
             "COVERAGE_OPEN_HTML=0 ./coverage.sh all",
             workflow,
+        )
+        self.assertRegex(
+            workflow,
+            r'coverage_enforce_thresholds:\s*\n(?:[^\n]*\n){0,4}\s*default:\s*"1"',
         )
         self.assertNotIn(
             "COVERAGE_ENFORCE_THRESHOLDS=0 "

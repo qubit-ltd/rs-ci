@@ -9,10 +9,10 @@ on:
         type: string
         default: "0"
       coverage_enforce_thresholds:
-        description: Set to 1 to enforce per-source coverage thresholds.
+        description: Set to 0 only in rs-ci policy tests; production callers must keep 1.
         required: false
         type: string
-        default: "0"
+        default: "1"
       cargo_fuzz_mode:
         description: "Conditional fuzz check mode: smoke, build-only, or disabled."
         required: false

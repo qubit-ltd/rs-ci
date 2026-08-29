@@ -28,6 +28,24 @@ COVERAGE_SOURCE_DIR="${COVERAGE_SOURCE_DIR:-src}"
 COVERAGE_EXTRA_EXCLUDE_REGEX="${COVERAGE_EXTRA_EXCLUDE_REGEX:-}"
 COVERAGE_OPEN_HTML="${COVERAGE_OPEN_HTML:-1}"
 COVERAGE_ENFORCE_THRESHOLDS="${COVERAGE_ENFORCE_THRESHOLDS:-1}"
+
+require_coverage_threshold_enforcement() {
+    if [ "$COVERAGE_ENFORCE_THRESHOLDS" = "1" ]; then
+        return 0
+    fi
+
+    if [ "${RS_CI_ALLOW_DISABLED_COVERAGE_THRESHOLDS:-0}" = "1" ]; then
+        return 0
+    fi
+
+    echo "error: COVERAGE_ENFORCE_THRESHOLDS must be 1" >&2
+    echo "Disabling coverage thresholds is not allowed in rs-ci scripts or CI configs." >&2
+    echo "For proc-macro or instrumentation gaps, add threshold_exempt_files in .rs-ci-coverage.json." >&2
+    exit 1
+}
+
+require_coverage_threshold_enforcement
+
 COVERAGE_ALL_FEATURES="${COVERAGE_ALL_FEATURES:-1}"
 COVERAGE_NO_DEFAULT_FEATURES="${COVERAGE_NO_DEFAULT_FEATURES:-0}"
 COVERAGE_FEATURES="${COVERAGE_FEATURES:-}"
