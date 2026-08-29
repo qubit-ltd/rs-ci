@@ -80,6 +80,7 @@ class CargoMiriCheckTests(unittest.TestCase):
         *arguments: str,
         rs_ci: object | None,
         status: int = 0,
+        cargo_target_dir: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
         self.write_metadata(rs_ci)
         env = os.environ.copy()
@@ -89,6 +90,8 @@ class CargoMiriCheckTests(unittest.TestCase):
         env["FAKE_MIRI_STATUS"] = str(status)
         env["RS_CI_PROJECT_ROOT"] = str(self.root)
         env["RS_CI_MIRI_TOOLCHAIN"] = "nightly-2099-01-01"
+        if cargo_target_dir is not None:
+            env["CARGO_TARGET_DIR"] = str(cargo_target_dir)
         return subprocess.run(
             ["bash", str(CHECKER), *arguments],
             cwd="/",
@@ -158,6 +161,52 @@ class CargoMiriCheckTests(unittest.TestCase):
 
         self.assertNotEqual(0, result.returncode)
         self.assertIn("Usage", result.stderr)
+
+    def test_clears_stale_miri_cache_when_cargo_lock_changes(self) -> None:
+        target_root = self.root / "target" / "rs-ci"
+        miri_target = target_root / "miri"
+        miri_target.mkdir(parents=True)
+        stale_marker = miri_target / "stale-artifact.txt"
+        stale_marker.write_text("old", encoding="utf-8")
+        stamp = miri_target / ".rs-ci-miri-input-stamp"
+        stamp.write_text(
+            "toolchain=nightly-2099-01-01\nmissing-lock\n",
+            encoding="utf-8",
+        )
+        (self.root / "Cargo.lock").write_text("[[package]]\nname = \"demo\"\n", encoding="utf-8")
+
+        result = self.run_checker(
+            rs_ci={"miri": True},
+            cargo_target_dir=target_root,
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertFalse(stale_marker.exists())
+        self.assertIn("Miri build inputs changed", result.stdout)
+
+    def test_preserves_miri_cache_when_inputs_unchanged(self) -> None:
+        lock_content = "[[package]]\nname = \"demo\"\n"
+        (self.root / "Cargo.lock").write_text(lock_content, encoding="utf-8")
+
+        target_root = self.root / "target" / "rs-ci"
+        miri_target = target_root / "miri"
+        miri_target.mkdir(parents=True)
+        marker = miri_target / "cached-artifact.txt"
+        marker.write_text("keep", encoding="utf-8")
+        stamp_content = f"toolchain=nightly-2099-01-01\n{lock_content}"
+        (miri_target / ".rs-ci-miri-input-stamp").write_text(
+            stamp_content,
+            encoding="utf-8",
+        )
+
+        result = self.run_checker(
+            rs_ci={"miri": True},
+            cargo_target_dir=target_root,
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertTrue(marker.exists())
+        self.assertNotIn("Miri build inputs changed", result.stdout)
 
 
 if __name__ == "__main__":

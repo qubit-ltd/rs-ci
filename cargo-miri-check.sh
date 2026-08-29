@@ -67,7 +67,41 @@ if [ "$DETECT_ONLY" -eq 1 ]; then
     exit 0
 fi
 
+miri_target_dir() {
+    local base="${CARGO_TARGET_DIR:-$PROJECT_ROOT/target/rs-ci}"
+    printf '%s/miri' "$base"
+}
+
+compute_miri_input_stamp() {
+    {
+        printf 'toolchain=%s\n' "$RS_CI_MIRI_TOOLCHAIN"
+        if [ -f "$PROJECT_ROOT/Cargo.lock" ]; then
+            cat "$PROJECT_ROOT/Cargo.lock"
+        else
+            printf 'missing-lock\n'
+        fi
+    }
+}
+
+ensure_fresh_miri_target_cache() {
+    local miri_target="$1"
+    local stamp_file="$miri_target/.rs-ci-miri-input-stamp"
+
+    if [ -f "$stamp_file" ] && cmp -s <(compute_miri_input_stamp) "$stamp_file"; then
+        return 0
+    fi
+
+    if [ -d "$miri_target" ]; then
+        echo "Miri build inputs changed; clearing '$miri_target'"
+        rm -rf "$miri_target"
+    fi
+
+    mkdir -p "$miri_target"
+    compute_miri_input_stamp > "$stamp_file"
+}
+
 cd "$PROJECT_ROOT"
+ensure_fresh_miri_target_cache "$(miri_target_dir)"
 for config in "${CONFIGS[@]}"; do
     package=$(jq -r '.name' <<< "$config")
     TEST_ARGS=()
