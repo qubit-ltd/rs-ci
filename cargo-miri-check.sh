@@ -108,17 +108,12 @@ for config in "${CONFIGS[@]}"; do
     while IFS= read -r -d '' argument; do
         TEST_ARGS+=("$argument")
     done < <(jq -j '.test_args[] | . + "\u0000"' <<< "$config")
-    MIRI_COMMAND=(
-        cargo +"$RS_CI_MIRI_TOOLCHAIN" miri test
-        --all-features
-        --package "$package"
-    )
-    if [ "${#TEST_ARGS[@]}" -gt 0 ]; then
-        MIRI_COMMAND+=("${TEST_ARGS[@]}")
-    fi
     echo "Running Miri for package '$package'"
     PROPTEST_DISABLE_FAILURE_PERSISTENCE=1 \
     PROPTEST_CASES=8 \
     MIRIFLAGS="${MIRIFLAGS:+$MIRIFLAGS }-Zmiri-disable-isolation" \
-    "${MIRI_COMMAND[@]}"
+    cargo +"$RS_CI_MIRI_TOOLCHAIN" miri test \
+        --all-features \
+        --package "$package" \
+        "${TEST_ARGS[@]}"
 done

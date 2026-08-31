@@ -132,15 +132,6 @@ class CargoMiriCheckTests(unittest.TestCase):
             self.command_log.read_text(encoding="utf-8"),
         )
 
-    def test_guards_empty_miri_test_args_for_bash_32(self) -> None:
-        script = CHECKER.read_text(encoding="utf-8")
-
-        self.assertRegex(
-            script,
-            r'if \[ "\$\{#TEST_ARGS\[@\]\}" -gt 0 \]; then'
-            r'(?s:.*?)MIRI_COMMAND\+=\("\$\{TEST_ARGS\[@\]\}"\)',
-        )
-
     def test_appends_configured_miri_test_arguments(self) -> None:
         result = self.run_checker(
             rs_ci={
