@@ -45,6 +45,21 @@ def write_fake_cargo(bin_dir: Path, log_path: Path) -> None:
                 exit "${{FAKE_BUILD_EXIT:-0}}"
             fi
             if [ "$2" = "fuzz" ] && [ "$3" = "run" ]; then
+                printf 'ASAN_OPTIONS=%s\\n' "${{ASAN_OPTIONS-}}" >> "{log_path}"
+                run_count=0
+                if [ -f "${{FAKE_RUN_COUNT_FILE}}" ]; then
+                    run_count=$(cat "${{FAKE_RUN_COUNT_FILE}}")
+                fi
+                run_count=$((run_count + 1))
+                printf '%s\\n' "$run_count" > "${{FAKE_RUN_COUNT_FILE}}"
+                if [ "$run_count" -eq 1 ] && [ -n "${{FAKE_FIRST_RUN_STDERR-}}" ]; then
+                    printf '%s\\n' "$FAKE_FIRST_RUN_STDERR" >&2
+                elif [ "$run_count" -gt 1 ] && [ -n "${{FAKE_RUN_STDERR-}}" ]; then
+                    printf '%s\\n' "$FAKE_RUN_STDERR" >&2
+                fi
+                if [ "$run_count" -eq 1 ]; then
+                    exit "${{FAKE_FIRST_RUN_EXIT:-${{FAKE_RUN_EXIT:-0}}}}"
+                fi
                 exit "${{FAKE_RUN_EXIT:-0}}"
             fi
             exit 0
@@ -72,6 +87,7 @@ class CargoFuzzCheckTests(unittest.TestCase):
         self.tmp_dir = self.root / "temporary-corpora"
         self.tmp_dir.mkdir()
         self.log_path = self.root / "cargo.log"
+        self.run_count_path = self.root / "run-count"
         write_fake_cargo(self.bin_dir, self.log_path)
         write_fake_cargo_fuzz(self.bin_dir)
 
@@ -100,6 +116,7 @@ class CargoFuzzCheckTests(unittest.TestCase):
                 "RS_CI_FUZZ_SECONDS_PER_TARGET": duration,
                 "RS_CI_FUZZ_MAX_LEN": max_len,
                 "FAKE_FUZZ_TARGETS": targets,
+                "FAKE_RUN_COUNT_FILE": str(self.run_count_path),
                 "TMPDIR": str(self.tmp_dir),
             }
         )
@@ -267,7 +284,27 @@ class CargoFuzzCheckTests(unittest.TestCase):
         )
 
         self.assertEqual(19, result.returncode)
-        self.assertIn("+nightly-2099-01-01 fuzz run alpha", self.command_log())
+        log = self.command_log()
+        self.assertEqual(1, log.count("+nightly-2099-01-01 fuzz run alpha"))
+        self.assertNotIn("retrying with LeakSanitizer disabled", result.stderr)
+
+    def test_retries_ptrace_leak_sanitizer_failure_without_project_artifacts(self) -> None:
+        write_fuzz_manifest(self.project_root)
+
+        result = self.run_checker(
+            targets="alpha\n",
+            extra_env={
+                "FAKE_FIRST_RUN_EXIT": "91",
+                "FAKE_FIRST_RUN_STDERR": "LeakSanitizer does not work under ptrace",
+            },
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("retrying with LeakSanitizer disabled", result.stderr)
+        self.assertEqual(2, self.command_log().count("fuzz run alpha"))
+        self.assertIn("ASAN_OPTIONS=detect_leaks=0", self.command_log())
+        self.assertIn("-artifact_prefix=", self.command_log())
+        self.assertFalse((self.project_root / "fuzz" / "artifacts").exists())
 
     def test_uses_committed_seed_corpus_without_retaining_temporary_corpus(self) -> None:
         write_fuzz_manifest(self.project_root)

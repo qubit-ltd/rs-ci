@@ -22,11 +22,11 @@ PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
 RS_CI_FUZZ_MODE="${RS_CI_FUZZ_MODE:-smoke}"
 RS_CI_FUZZ_SECONDS_PER_TARGET="${RS_CI_FUZZ_SECONDS_PER_TARGET:-10}"
 RS_CI_FUZZ_MAX_LEN="${RS_CI_FUZZ_MAX_LEN:-4096}"
-TEMP_CORPUS=""
+TEMP_WORKSPACE=""
 
 cleanup() {
-    if [ -n "$TEMP_CORPUS" ] && [ -d "$TEMP_CORPUS" ]; then
-        command rm -rf "$TEMP_CORPUS"
+    if [ -n "$TEMP_WORKSPACE" ] && [ -d "$TEMP_WORKSPACE" ]; then
+        command rm -rf "$TEMP_WORKSPACE"
     fi
 }
 trap cleanup EXIT
@@ -70,10 +70,23 @@ require_cargo_fuzz() {
     fi
 }
 
+leak_detection_disabled_asan_options() {
+    if [ -n "${ASAN_OPTIONS:-}" ]; then
+        printf '%s:detect_leaks=0' "$ASAN_OPTIONS"
+    else
+        printf '%s' 'detect_leaks=0'
+    fi
+}
+
 run_target() {
     local target="$1"
     local writable_corpus
     local seed_corpus="$PROJECT_ROOT/fuzz/corpus/$target"
+    local artifact_prefix
+    local run_log
+    local run_status
+    local retry_asan_options
+    local -a corpus_arguments
 
     echo "==> cargo fuzz build $target"
     cargo +"$RS_CI_FUZZ_TOOLCHAIN" fuzz build "$target"
@@ -82,18 +95,34 @@ run_target() {
         return
     fi
 
-    writable_corpus="$TEMP_CORPUS/$target"
+    writable_corpus="$TEMP_WORKSPACE/corpus/$target"
+    artifact_prefix="$TEMP_WORKSPACE/artifacts/$target"
+    run_log="$TEMP_WORKSPACE/logs/$target.log"
     mkdir -p "$writable_corpus"
-    echo "==> cargo fuzz run $target for ${RS_CI_FUZZ_SECONDS_PER_TARGET}s"
+    mkdir -p "$artifact_prefix"
+    mkdir -p "$(dirname "$run_log")"
+    corpus_arguments=("$target" "$writable_corpus")
     if [ -d "$seed_corpus" ]; then
-        cargo +"$RS_CI_FUZZ_TOOLCHAIN" fuzz run "$target" "$writable_corpus" "$seed_corpus" -- \
-            "-max_total_time=$RS_CI_FUZZ_SECONDS_PER_TARGET" \
-            "-max_len=$RS_CI_FUZZ_MAX_LEN"
-    else
-        cargo +"$RS_CI_FUZZ_TOOLCHAIN" fuzz run "$target" "$writable_corpus" -- \
-            "-max_total_time=$RS_CI_FUZZ_SECONDS_PER_TARGET" \
-            "-max_len=$RS_CI_FUZZ_MAX_LEN"
+        corpus_arguments+=("$seed_corpus")
     fi
+    echo "==> cargo fuzz run $target for ${RS_CI_FUZZ_SECONDS_PER_TARGET}s"
+    if cargo +"$RS_CI_FUZZ_TOOLCHAIN" fuzz run "${corpus_arguments[@]}" -- \
+            "-max_total_time=$RS_CI_FUZZ_SECONDS_PER_TARGET" \
+            "-max_len=$RS_CI_FUZZ_MAX_LEN" \
+            "-artifact_prefix=$artifact_prefix/" 2>&1 | tee "$run_log"; then
+        return
+    fi
+    run_status=${PIPESTATUS[0]}
+    if ! grep -Fq 'LeakSanitizer does not work under ptrace' "$run_log"; then
+        return "$run_status"
+    fi
+
+    retry_asan_options=$(leak_detection_disabled_asan_options)
+    echo "warning: cargo-fuzz target '$target' cannot run LeakSanitizer under ptrace; retrying with LeakSanitizer disabled" >&2
+    ASAN_OPTIONS="$retry_asan_options" cargo +"$RS_CI_FUZZ_TOOLCHAIN" fuzz run "${corpus_arguments[@]}" -- \
+        "-max_total_time=$RS_CI_FUZZ_SECONDS_PER_TARGET" \
+        "-max_len=$RS_CI_FUZZ_MAX_LEN" \
+        "-artifact_prefix=$artifact_prefix/"
 }
 
 if [ "${1:-}" = "--is-configured" ]; then
@@ -132,7 +161,7 @@ if [ "${#targets[@]}" -eq 0 ]; then
 fi
 
 if [ "$RS_CI_FUZZ_MODE" = "smoke" ]; then
-    TEMP_CORPUS=$(mktemp -d "${TMPDIR:-/tmp}/rs-ci-fuzz.XXXXXX")
+    TEMP_WORKSPACE=$(mktemp -d "${TMPDIR:-/tmp}/rs-ci-fuzz.XXXXXX")
 fi
 
 for target in "${targets[@]}"; do
