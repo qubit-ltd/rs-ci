@@ -109,11 +109,15 @@ for config in "${CONFIGS[@]}"; do
         TEST_ARGS+=("$argument")
     done < <(jq -j '.test_args[] | . + "\u0000"' <<< "$config")
     echo "Running Miri for package '$package'"
+    miri_args=(
+        --all-features
+        --package "$package"
+    )
+    if [ ${#TEST_ARGS[@]} -gt 0 ]; then
+        miri_args+=("${TEST_ARGS[@]}")
+    fi
     PROPTEST_DISABLE_FAILURE_PERSISTENCE=1 \
     PROPTEST_CASES=8 \
     MIRIFLAGS="${MIRIFLAGS:+$MIRIFLAGS }-Zmiri-disable-isolation" \
-    cargo +"$RS_CI_MIRI_TOOLCHAIN" miri test \
-        --all-features \
-        --package "$package" \
-        "${TEST_ARGS[@]}"
+    cargo +"$RS_CI_MIRI_TOOLCHAIN" miri test "${miri_args[@]}"
 done
