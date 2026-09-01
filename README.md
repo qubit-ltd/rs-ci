@@ -266,6 +266,8 @@ sanitizer names are configuration errors rather than silent skips.
 By default, Miri runs the package's complete all-feature test suite. An opted-in
 package can set `miri-test-args` to append Cargo test-selection arguments, which
 keeps Miri focused on tests that exercise unsafe or otherwise sensitive code.
+The checker fails when no test harness reports at least one selected test, so a
+stale target or filter cannot produce a successful but empty Miri run.
 
 Both `ci-check.sh` and the reusable GitHub workflow delegate execution to the
 same checker scripts. The GitHub workflow exposes `miri_toolchain` and
