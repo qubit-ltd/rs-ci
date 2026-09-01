@@ -248,8 +248,12 @@ workflow 提供 `miri_toolchain` 和 `sanitizer_toolchain` 输入，并把两项
 如果调用方已经 opt-in、却未更新 `.rs-ci` 子模块，workflow 会明确要求更新，
 不会静默漏掉已请求的检查。
 
-Miri 会对每个 opt-in package 运行 all-feature 测试。切换本地工具链后，如果
-Miri sysroot 或构建缓存出现不一致，可以运行：
+Miri 会对每个 opt-in package 运行 all-feature 测试。
+package 可以通过 `miri-test-args` 追加 Cargo 测试选择参数，把 Miri 限定在
+覆盖 unsafe 或其他敏感代码的测试上。如果没有任何测试 harness 报告至少选中
+一个测试，checker 会直接失败，避免过期 target 或过滤条件产生空跑成功。
+
+切换本地工具链后，如果 Miri sysroot 或构建缓存出现不一致，可以运行：
 
 ```bash
 cargo +"$RS_CI_MIRI_TOOLCHAIN" miri clean

@@ -43,6 +43,7 @@ class CargoMiriCheckTests(unittest.TestCase):
                         ;;
                 esac
                 printf '%s\n' "$*" >> "$FAKE_CARGO_LOG"
+                printf '%s\n' "${FAKE_MIRI_OUTPUT:-running 1 test}"
                 exit "${FAKE_MIRI_STATUS:-0}"
                 """
             ),
@@ -80,6 +81,7 @@ class CargoMiriCheckTests(unittest.TestCase):
         *arguments: str,
         rs_ci: object | None,
         status: int = 0,
+        output: str = "running 1 test",
         cargo_target_dir: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
         self.write_metadata(rs_ci)
@@ -88,6 +90,7 @@ class CargoMiriCheckTests(unittest.TestCase):
         env["FAKE_CARGO_METADATA"] = str(self.metadata_file)
         env["FAKE_CARGO_LOG"] = str(self.command_log)
         env["FAKE_MIRI_STATUS"] = str(status)
+        env["FAKE_MIRI_OUTPUT"] = output
         env["RS_CI_PROJECT_ROOT"] = str(self.root)
         env["RS_CI_MIRI_TOOLCHAIN"] = "nightly-2099-01-01"
         if cargo_target_dir is not None:
@@ -164,6 +167,18 @@ class CargoMiriCheckTests(unittest.TestCase):
         result = self.run_checker(rs_ci={"miri": True}, status=7)
 
         self.assertEqual(7, result.returncode)
+
+    def test_rejects_successful_miri_run_that_selects_no_tests(self) -> None:
+        result = self.run_checker(
+            rs_ci={
+                "miri": True,
+                "miri-test-args": ["--test", "tests", "missing_filter"],
+            },
+            output="running 0 tests",
+        )
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("Miri selected no tests for package 'demo'", result.stderr)
 
     def test_rejects_unknown_argument(self) -> None:
         result = self.run_checker("--unknown", rs_ci={"miri": True})
