@@ -102,6 +102,14 @@ ensure_fresh_miri_target_cache() {
 
 cd "$PROJECT_ROOT"
 ensure_fresh_miri_target_cache "$(miri_target_dir)"
+MIRI_OUTPUT_FILE=""
+cleanup_miri_output() {
+    if [ -n "$MIRI_OUTPUT_FILE" ] && [ -f "$MIRI_OUTPUT_FILE" ]; then
+        command rm -f "$MIRI_OUTPUT_FILE"
+    fi
+}
+trap cleanup_miri_output EXIT
+
 for config in "${CONFIGS[@]}"; do
     package=$(jq -r '.name' <<< "$config")
     TEST_ARGS=()
@@ -116,8 +124,22 @@ for config in "${CONFIGS[@]}"; do
     if [ ${#TEST_ARGS[@]} -gt 0 ]; then
         miri_args+=("${TEST_ARGS[@]}")
     fi
+    MIRI_OUTPUT_FILE=$(mktemp "${TMPDIR:-/tmp}/rs-ci-miri-output.XXXXXX")
+    set +e
     PROPTEST_DISABLE_FAILURE_PERSISTENCE=1 \
-    PROPTEST_CASES=8 \
-    MIRIFLAGS="${MIRIFLAGS:+$MIRIFLAGS }-Zmiri-disable-isolation" \
-    cargo +"$RS_CI_MIRI_TOOLCHAIN" miri test "${miri_args[@]}"
+        PROPTEST_CASES=8 \
+        MIRIFLAGS="${MIRIFLAGS:+$MIRIFLAGS }-Zmiri-disable-isolation" \
+        cargo +"$RS_CI_MIRI_TOOLCHAIN" miri test "${miri_args[@]}" \
+        2>&1 | tee "$MIRI_OUTPUT_FILE"
+    MIRI_STATUS=${PIPESTATUS[0]}
+    set -e
+    if [ "$MIRI_STATUS" -ne 0 ]; then
+        exit "$MIRI_STATUS"
+    fi
+    if ! grep -Eq '^running [1-9][0-9]* tests?$' "$MIRI_OUTPUT_FILE"; then
+        echo "error: Miri selected no tests for package '$package'" >&2
+        exit 1
+    fi
+    command rm -f "$MIRI_OUTPUT_FILE"
+    MIRI_OUTPUT_FILE=""
 done
