@@ -43,17 +43,13 @@ if [ "${#packages[@]}" -eq 0 ]; then
     exit 0
 fi
 
-package_args=()
-for package in "${packages[@]}"; do
-    package_args+=(--package "$package")
-done
-
 # Local sibling crates may have versions that have not been published to
-# crates.io yet. Patch those path dependencies for the package verification
-# command while keeping the packaged manifest registry-compatible.
-package_config_args=()
-declare -A patched_dependencies=()
+# crates.io yet. Patch those path dependencies for each package verification
+# command while keeping the packaged manifest registry-compatible. Keeping the
+# patch set package-specific avoids Cargo warnings for unused patches.
 for package in "${packages[@]}"; do
+    package_config_args=()
+    declare -A patched_dependencies=()
     while IFS=$'\t' read -r dependency_name dependency_path; do
         [ -n "$dependency_name" ] || continue
         [ -n "$dependency_path" ] || continue
@@ -75,15 +71,13 @@ for package in "${packages[@]}"; do
             | @tsv
         ' <<< "$metadata"
     )
-done
 
-if cargo +"$RS_CI_BUILD_TOOLCHAIN" "${package_config_args[@]}" package \
-    "${package_args[@]}" \
-    --allow-dirty; then
-    :
-else
-    status=$?
-    echo "Cargo package verification failed for selected workspace packages." >&2
-    exit "$status"
-fi
+    cargo +"$RS_CI_BUILD_TOOLCHAIN" "${package_config_args[@]}" package \
+        --package "$package" \
+        --allow-dirty || {
+        status=$?
+        echo "Cargo package verification failed for package '$package'." >&2
+        exit "$status"
+    }
+done
 echo "Cargo package verification passed for ${#packages[@]} workspace package(s)."
