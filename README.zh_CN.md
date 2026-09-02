@@ -11,7 +11,7 @@
 - `cargo-env.sh`：本地入口脚本共用的 Cargo 环境设置。
 - `cargo-lock-update.sh`：同步根项目及支持的辅助 Cargo.lock 文件。
 - `update-submodule.sh`：本地 submodule 同步脚本，默认从远程跟踪分支更新 submodule。
-- `cargo-feature-check.sh`：可选的项目声明式 Cargo feature matrix 运行器。
+- `cargo-feature-check.sh`：可选的项目声明式 Cargo feature 与依赖兼容矩阵运行器。
 - `cargo-fuzz-check.sh`：按条件运行的 cargo-fuzz 构建与限时 smoke 测试脚本。
 - `cargo-loom-check.sh`：按条件运行的 Loom 模型测试脚本。
 - `rs-ci-metadata.sh`：读取 package 级 CI opt-in 的共享 Cargo metadata 脚本。
@@ -264,12 +264,12 @@ AddressSanitizer 支持 Linux `x86_64` 以及 macOS（`arm64` 和 `x86_64`），
 不支持的平台会报告跳过。可复用 GitHub workflow 会在 Linux 和 macOS 上运行已
 opt-in 的 Miri 与 AddressSanitizer 检查；Windows 继续只运行常规测试 job。
 
-## Cargo Feature Matrix
+## Cargo 兼容矩阵
 
 默认情况下，CI 保持历史行为：Clippy 和测试使用 `--all-features`，文档构建使用
 Cargo 默认 feature 选择，不额外检查其他 feature 组合。
 
-如果项目需要额外 feature 组合，可以在项目根目录添加
+如果项目需要额外 feature 组合或依赖版本兼容检查，可以在项目根目录添加
 `.rs-ci-cargo-matrix.json`。可复用 workflow、CircleCI 模板和本地 `ci-check.sh`
 会自动检测这个文件，并在默认 CI 路径之外追加这些检查。
 
@@ -288,6 +288,25 @@ Cargo 默认 feature 选择，不额外检查其他 feature 组合。
       "commands": ["test", "doc"],
       "defaultFeatures": false,
       "features": ["source-toml"]
+    },
+    {
+      "name": "serde-json-minimum",
+      "commands": ["test"],
+      "allFeatures": true,
+      "dependency": {
+        "name": "serde_json",
+        "resolution": "precise",
+        "version": "1.0.151"
+      }
+    },
+    {
+      "name": "serde-json-latest",
+      "commands": ["test"],
+      "allFeatures": true,
+      "dependency": {
+        "name": "serde_json",
+        "resolution": "latest"
+      }
     }
   ]
 }
@@ -301,6 +320,16 @@ Cargo 默认 feature 选择，不额外检查其他 feature 组合。
 Workspace 检查可以通过非空 `packages` 列表指定准确的 Cargo package 名称。
 运行器会把每个选择转换为 `--package`；省略 `packages` 时保留 Cargo 的默认
 package 选择行为。
+
+每个检查可以通过可选的 `dependency` 选择一个依赖。`precise` 解析模式必须提供
+`version`，运行 `cargo update -p NAME --precise VERSION`，并验证 Cargo 最终解析到
+的版本与其完全一致。`latest` 模式禁止提供 `version`，运行
+`cargo update -p NAME`，选择所有 manifest 约束允许的最新版本。依赖检查要求该包
+只解析出一个版本，并使用 `--locked` 执行配置的命令。
+
+检查器会在每次本地运行结束后恢复根目录原有的 `Cargo.lock`，失败或中断时也一样。
+每个依赖检查还会使用独立的 target 目录。GitHub Actions 并行执行矩阵条目；本地
+`ci-check.sh` 通过 `run-all` 顺序执行完全相同的条目。
 
 ## GitHub Pages 站点
 
@@ -336,7 +365,7 @@ Cargo 命令之前拒绝浮动的 `nightly`，共享默认值统一定义在 `to
 - `RS_CI_AUXILIARY_MANIFESTS`：需要同步 lock 文件的其他 Cargo manifest 路径，每行一个。
 - `RS_CI_LOCKFILE_TOOLCHAIN`：lock 文件 metadata 检查和重新生成使用的可选工具链；默认使用 `RS_CI_BUILD_TOOLCHAIN`。
 - `RS_CI_RUSTFMT_CONFIG`：rustfmt 配置路径；默认是运行中的 CI 脚本所在目录旁的 `rustfmt.toml`。
-- `RS_CI_CARGO_MATRIX_CONFIG`：可选 Cargo feature matrix 配置文件的项目相对路径；默认是 `.rs-ci-cargo-matrix.json`。
+- `RS_CI_CARGO_MATRIX_CONFIG`：可选 Cargo 兼容矩阵配置文件的项目相对路径；默认是 `.rs-ci-cargo-matrix.json`。
 - `RS_CI_CARGO_HOME_MODE`：本地脚本使用的 Cargo 缓存模式，可选 `project` 或 `shared`；默认是 `project`，避免多个 `rs-*` 仓库并行检查时共享 Cargo package cache 和 index 锁。设为 `shared` 可以保留 Cargo 默认的全局缓存行为。
 - `RS_CI_CARGO_HOME_ROOT`：当 `RS_CI_CARGO_HOME_MODE=project` 时，per-project Cargo home 的根目录；默认是 `$XDG_CACHE_HOME/rs-ci/cargo-home` 或 `$HOME/.cache/rs-ci/cargo-home`。
 - `RUN_COVERAGE_CFG_CLIPPY`：设为 `1` 时，使用 `RUSTFLAGS="--cfg coverage"` 运行 clippy。

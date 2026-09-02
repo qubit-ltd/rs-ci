@@ -8,10 +8,11 @@
 #
 ################################################################################
 #
-# Optional Cargo feature matrix runner.
+# Optional Cargo compatibility matrix runner.
 #
 # Projects can add .rs-ci-cargo-matrix.json in the project root to request
-# additional Cargo checks beyond the default CI feature selection.
+# additional feature or dependency compatibility checks beyond the default CI
+# selection.
 #
 
 set -euo pipefail
@@ -48,7 +49,36 @@ if [ -z "${RS_CI_FEATURE_MATRIX_TARGET_DIR:-}" ]; then
         RS_CI_FEATURE_MATRIX_TARGET_DIR="$PROJECT_ROOT/target/rs-ci-feature-matrix"
     fi
 fi
-export CARGO_TARGET_DIR="$RS_CI_FEATURE_MATRIX_TARGET_DIR"
+MATRIX_TARGET_ROOT="$RS_CI_FEATURE_MATRIX_TARGET_DIR"
+export CARGO_TARGET_DIR="$MATRIX_TARGET_ROOT"
+
+LOCK_FILE="$PROJECT_ROOT/Cargo.lock"
+LOCK_BACKUP=""
+LOCK_BASELINE_READY=false
+LOCK_FILE_EXISTED=false
+
+restore_lockfile() {
+    if [ "$LOCK_BASELINE_READY" != "true" ]; then
+        return
+    fi
+    if [ "$LOCK_FILE_EXISTED" = "true" ]; then
+        command cp "$LOCK_BACKUP" "$LOCK_FILE"
+    elif [ -f "$LOCK_FILE" ]; then
+        command rm -f "$LOCK_FILE"
+    fi
+}
+
+cleanup() {
+    restore_lockfile
+    if [ -n "$LOCK_BACKUP" ] && [ -f "$LOCK_BACKUP" ]; then
+        command rm -f "$LOCK_BACKUP"
+    fi
+}
+
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 print_usage() {
     echo "Usage: ./cargo-feature-check.sh [run-all|run-index <index>|github-matrix|validate|help]"
@@ -99,6 +129,23 @@ validate_config() {
                 or (
                     ((.features // []) | length) == 0
                     and ((if has("defaultFeatures") then .defaultFeatures else true end) == true)
+                )
+            )
+            and (
+                (has("dependency") | not)
+                or (
+                    (.dependency | type == "object")
+                    and (.dependency.name | type == "string" and test("^[A-Za-z0-9][A-Za-z0-9_-]*$"))
+                    and (
+                        (
+                            .dependency.resolution == "precise"
+                            and (.dependency.version | type == "string" and test("^[0-9A-Za-z][0-9A-Za-z.+_-]*$"))
+                        )
+                        or (
+                            .dependency.resolution == "latest"
+                            and (.dependency | has("version") | not)
+                        )
+                    )
                 )
             )
         )
@@ -153,6 +200,63 @@ build_feature_args() {
     fi
 }
 
+capture_lockfile_baseline() {
+    if [ "$LOCK_BASELINE_READY" = "true" ]; then
+        return
+    fi
+    LOCK_BACKUP=$(mktemp -t rs-ci-cargo-matrix-lock.XXXXXX)
+    if [ -f "$LOCK_FILE" ]; then
+        command cp "$LOCK_FILE" "$LOCK_BACKUP"
+        LOCK_FILE_EXISTED=true
+    fi
+    LOCK_BASELINE_READY=true
+}
+
+prepare_dependency() {
+    local index="$1"
+    local dependency_name
+    local expected_version
+    local resolution
+    local resolved_versions=()
+
+    CARGO_LOCK_ARGS=()
+    export CARGO_TARGET_DIR="$MATRIX_TARGET_ROOT"
+    restore_lockfile
+    if [ "$(jq -r --argjson index "$index" '.checks[$index] | has("dependency")' "$CONFIG_FILE")" != "true" ]; then
+        return
+    fi
+
+    capture_lockfile_baseline
+    dependency_name=$(jq -r --argjson index "$index" '.checks[$index].dependency.name' "$CONFIG_FILE")
+    resolution=$(jq -r --argjson index "$index" '.checks[$index].dependency.resolution' "$CONFIG_FILE")
+    export CARGO_TARGET_DIR="$MATRIX_TARGET_ROOT/dependency-$index"
+
+    if [ "$resolution" = "precise" ]; then
+        expected_version=$(jq -r --argjson index "$index" '.checks[$index].dependency.version' "$CONFIG_FILE")
+        cargo +"$RS_CI_BUILD_TOOLCHAIN" update -p "$dependency_name" --precise "$expected_version"
+    else
+        cargo +"$RS_CI_BUILD_TOOLCHAIN" update -p "$dependency_name"
+    fi
+
+    while IFS= read -r resolved_version; do
+        [ -n "$resolved_version" ] && resolved_versions+=("$resolved_version")
+    done < <(
+        cargo +"$RS_CI_BUILD_TOOLCHAIN" metadata --locked --format-version 1 |
+            jq -r --arg dependency "$dependency_name" \
+                '[.packages[] | select(.name == $dependency) | .version] | unique[]'
+    )
+    if [ "${#resolved_versions[@]}" -ne 1 ]; then
+        echo "error: expected exactly one resolved version of $dependency_name, found ${#resolved_versions[@]}" >&2
+        exit 1
+    fi
+    if [ "$resolution" = "precise" ] && [ "${resolved_versions[0]}" != "$expected_version" ]; then
+        echo "error: expected $dependency_name $expected_version, resolved ${resolved_versions[0]}" >&2
+        exit 1
+    fi
+    echo "Resolved dependency $dependency_name ${resolved_versions[0]}"
+    CARGO_LOCK_ARGS=(--locked)
+}
+
 print_check_header() {
     local index="$1"
     local name
@@ -166,7 +270,7 @@ print_check_header() {
         feature_summary="${FEATURE_ARGS[*]}"
     fi
 
-    echo "==> Cargo feature matrix: $name ($feature_summary)"
+    echo "==> Cargo compatibility matrix: $name ($feature_summary)"
 }
 
 run_cargo_command() {
@@ -174,22 +278,22 @@ run_cargo_command() {
 
     case "$command" in
         check)
-            cargo +"$RS_CI_BUILD_TOOLCHAIN" check "${PACKAGE_ARGS[@]+${PACKAGE_ARGS[@]}}" "${FEATURE_ARGS[@]+${FEATURE_ARGS[@]}}" --verbose
+            cargo +"$RS_CI_BUILD_TOOLCHAIN" check "${PACKAGE_ARGS[@]+${PACKAGE_ARGS[@]}}" "${FEATURE_ARGS[@]+${FEATURE_ARGS[@]}}" "${CARGO_LOCK_ARGS[@]+${CARGO_LOCK_ARGS[@]}}" --verbose
             ;;
         build)
-            cargo +"$RS_CI_BUILD_TOOLCHAIN" build "${PACKAGE_ARGS[@]+${PACKAGE_ARGS[@]}}" "${FEATURE_ARGS[@]+${FEATURE_ARGS[@]}}" --verbose
+            cargo +"$RS_CI_BUILD_TOOLCHAIN" build "${PACKAGE_ARGS[@]+${PACKAGE_ARGS[@]}}" "${FEATURE_ARGS[@]+${FEATURE_ARGS[@]}}" "${CARGO_LOCK_ARGS[@]+${CARGO_LOCK_ARGS[@]}}" --verbose
             ;;
         test)
-            cargo +"$RS_CI_BUILD_TOOLCHAIN" test "${PACKAGE_ARGS[@]+${PACKAGE_ARGS[@]}}" "${FEATURE_ARGS[@]+${FEATURE_ARGS[@]}}" --verbose
+            cargo +"$RS_CI_BUILD_TOOLCHAIN" test "${PACKAGE_ARGS[@]+${PACKAGE_ARGS[@]}}" "${FEATURE_ARGS[@]+${FEATURE_ARGS[@]}}" "${CARGO_LOCK_ARGS[@]+${CARGO_LOCK_ARGS[@]}}" --verbose
             ;;
         doc)
-            RUSTDOCFLAGS="-D warnings" cargo +"$RS_CI_BUILD_TOOLCHAIN" doc --no-deps "${PACKAGE_ARGS[@]+${PACKAGE_ARGS[@]}}" "${FEATURE_ARGS[@]+${FEATURE_ARGS[@]}}" --verbose
+            RUSTDOCFLAGS="-D warnings" cargo +"$RS_CI_BUILD_TOOLCHAIN" doc --no-deps "${PACKAGE_ARGS[@]+${PACKAGE_ARGS[@]}}" "${FEATURE_ARGS[@]+${FEATURE_ARGS[@]}}" "${CARGO_LOCK_ARGS[@]+${CARGO_LOCK_ARGS[@]}}" --verbose
             ;;
         doc-test)
-            cargo +"$RS_CI_BUILD_TOOLCHAIN" test --doc "${PACKAGE_ARGS[@]+${PACKAGE_ARGS[@]}}" "${FEATURE_ARGS[@]+${FEATURE_ARGS[@]}}" --verbose
+            cargo +"$RS_CI_BUILD_TOOLCHAIN" test --doc "${PACKAGE_ARGS[@]+${PACKAGE_ARGS[@]}}" "${FEATURE_ARGS[@]+${FEATURE_ARGS[@]}}" "${CARGO_LOCK_ARGS[@]+${CARGO_LOCK_ARGS[@]}}" --verbose
             ;;
         clippy)
-            cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets "${PACKAGE_ARGS[@]+${PACKAGE_ARGS[@]}}" "${FEATURE_ARGS[@]+${FEATURE_ARGS[@]}}" -- -D warnings
+            cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets "${PACKAGE_ARGS[@]+${PACKAGE_ARGS[@]}}" "${FEATURE_ARGS[@]+${FEATURE_ARGS[@]}}" "${CARGO_LOCK_ARGS[@]+${CARGO_LOCK_ARGS[@]}}" -- -D warnings
             ;;
         *)
             echo "error: unsupported command '$command'" >&2
@@ -213,14 +317,15 @@ run_check_index() {
 
     cd "$PROJECT_ROOT"
     print_check_header "$index"
+    prepare_dependency "$index"
     while IFS= read -r command; do
         commands+=("$command")
     done < <(jq -r --argjson index "$index" '.checks[$index].commands[]' "$CONFIG_FILE")
     for command in "${commands[@]}"; do
         if [ "$command" = "clippy" ]; then
-            echo "==> cargo +$RS_CI_CLIPPY_TOOLCHAIN $command ${FEATURE_ARGS[*]}"
+            echo "==> cargo +$RS_CI_CLIPPY_TOOLCHAIN $command ${FEATURE_ARGS[*]} ${CARGO_LOCK_ARGS[*]}"
         else
-            echo "==> cargo +$RS_CI_BUILD_TOOLCHAIN $command ${FEATURE_ARGS[*]}"
+            echo "==> cargo +$RS_CI_BUILD_TOOLCHAIN $command ${FEATURE_ARGS[*]} ${CARGO_LOCK_ARGS[*]}"
         fi
         run_cargo_command "$command"
     done
@@ -231,7 +336,7 @@ run_all_checks() {
     local index
 
     if ! has_config; then
-        echo "No Cargo feature matrix config found at $CONFIG_FILE; skipping optional feature matrix checks."
+        echo "No Cargo compatibility matrix config found at $CONFIG_FILE; skipping optional matrix checks."
         return
     fi
 
@@ -260,11 +365,11 @@ case "$COMMAND" in
         ;;
     validate)
         if ! has_config; then
-            echo "No Cargo feature matrix config found at $CONFIG_FILE."
+            echo "No Cargo compatibility matrix config found at $CONFIG_FILE."
             exit 0
         fi
         validate_config
-        echo "Cargo feature matrix config is valid: $CONFIG_FILE"
+        echo "Cargo compatibility matrix config is valid: $CONFIG_FILE"
         ;;
     help|--help|-h)
         print_usage

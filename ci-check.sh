@@ -360,7 +360,7 @@ RS_CI_PROJECT_ROOT="$PROJECT_ROOT" \
 print_success "README dependency versions passed"
 echo ""
 
-print_step "12/15 Running configured Cargo feature matrix"
+print_step "12/15 Running configured Cargo compatibility matrix"
 MATRIX_CONFIG_NAME="${RS_CI_CARGO_MATRIX_CONFIG:-.rs-ci-cargo-matrix.json}"
 if [[ "$MATRIX_CONFIG_NAME" = /* ]]; then
     MATRIX_CONFIG_FILE="$MATRIX_CONFIG_NAME"
@@ -370,12 +370,12 @@ fi
 if [ -x "$SCRIPT_DIR/cargo-feature-check.sh" ]; then
     RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/cargo-feature-check.sh" run-all
 elif [ -f "$MATRIX_CONFIG_FILE" ]; then
-    print_error "Cargo feature matrix config exists, but cargo-feature-check.sh was not found"
+    print_error "Cargo compatibility matrix config exists, but cargo-feature-check.sh was not found"
     exit 1
 else
-    echo "No Cargo feature matrix config found; using the default CI feature behavior."
+    echo "No Cargo compatibility matrix config found; using the default CI behavior."
 fi
-print_success "Configured Cargo feature matrix checks passed"
+print_success "Configured Cargo compatibility matrix checks passed"
 echo ""
 
 print_step "13/15 Verifying Cargo package"

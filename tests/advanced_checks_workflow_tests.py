@@ -14,6 +14,22 @@ def job_block(workflow: str, job: str, next_job: str) -> str:
 
 
 class AdvancedChecksWorkflowTests(unittest.TestCase):
+    def test_cargo_matrix_reuses_resolved_toolchain_and_shared_checker(self) -> None:
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        block = job_block(workflow, "cargo_feature_matrix", "build_test_coverage")
+
+        self.assertIn(
+            "name: Cargo compatibility matrix (${{ matrix.name }})",
+            block,
+        )
+        self.assertIn("needs:\n      - fast_checks", block)
+        self.assertIn(
+            "RS_CI_BUILD_TOOLCHAIN: ${{ needs.resolve_toolchains.outputs.build }}",
+            block,
+        )
+        self.assertIn("Restore cargo cache", block)
+        self.assertIn("cargo-feature-check.sh run-index", block)
+
     def test_workflow_resolves_pinned_toolchains_from_the_contract(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
 

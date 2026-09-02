@@ -11,7 +11,7 @@ Shared scripts and CircleCI/GitHub Actions configuration for checking Rust code 
 - `cargo-env.sh`: shared Cargo environment setup used by local entry scripts.
 - `cargo-lock-update.sh`: synchronizes the root and supported auxiliary Cargo.lock files.
 - `update-submodule.sh`: local submodule sync script that updates submodules from remote tracking branches by default.
-- `cargo-feature-check.sh`: optional project-declared Cargo feature matrix runner.
+- `cargo-feature-check.sh`: optional project-declared Cargo feature and dependency compatibility matrix runner.
 - `cargo-fuzz-check.sh`: conditional cargo-fuzz build and bounded smoke-test runner.
 - `cargo-loom-check.sh`: conditional Loom model-test runner.
 - `rs-ci-metadata.sh`: shared Cargo metadata reader for package-scoped CI opt-ins.
@@ -291,13 +291,14 @@ Unsupported hosts report a skip. The reusable GitHub workflow runs opted-in
 Miri and AddressSanitizer checks on both Linux and macOS; Windows continues to
 run its regular test job only.
 
-## Cargo Feature Matrix
+## Cargo Compatibility Matrix
 
 By default, CI keeps the historical behavior: Clippy and tests run with
 `--all-features`, documentation uses Cargo's default feature selection, and no
 extra feature combinations are checked.
 
-Projects that need additional feature combinations can add
+Projects that need additional feature combinations or dependency-version
+compatibility checks can add
 `.rs-ci-cargo-matrix.json` in the project root. The reusable workflow, CircleCI
 template, and local `ci-check.sh` detect this file and run the configured
 checks in addition to the default CI path.
@@ -317,6 +318,25 @@ checks in addition to the default CI path.
       "commands": ["test", "doc"],
       "defaultFeatures": false,
       "features": ["source-toml"]
+    },
+    {
+      "name": "serde-json-minimum",
+      "commands": ["test"],
+      "allFeatures": true,
+      "dependency": {
+        "name": "serde_json",
+        "resolution": "precise",
+        "version": "1.0.151"
+      }
+    },
+    {
+      "name": "serde-json-latest",
+      "commands": ["test"],
+      "allFeatures": true,
+      "dependency": {
+        "name": "serde_json",
+        "resolution": "latest"
+      }
     }
   ]
 }
@@ -331,6 +351,18 @@ valid feature combinations from `Cargo.toml`.
 Workspace checks can set `packages` to a non-empty list of exact Cargo package
 names. The runner forwards each selection as `--package`; omitting `packages`
 keeps Cargo's default package selection.
+
+Each check can optionally select one `dependency`. The `precise` resolution
+requires `version`, runs `cargo update -p NAME --precise VERSION`, and verifies
+that Cargo resolved exactly that version. The `latest` resolution forbids
+`version` and runs `cargo update -p NAME`, which selects the newest version
+allowed by all manifests. Dependency checks require exactly one resolved
+version of the named package and run their configured commands with `--locked`.
+
+The checker restores the original root `Cargo.lock` after every local run,
+including failed and interrupted runs. Each dependency check also uses an
+isolated target directory. GitHub Actions executes matrix entries in parallel;
+local `ci-check.sh` executes the same entries sequentially through `run-all`.
 
 ## GitHub Pages Site
 
@@ -370,7 +402,7 @@ are defined in `toolchains.sh`.
 - `RS_CI_AUXILIARY_MANIFESTS`: additional Cargo manifest paths, one per line, whose lockfiles should be synchronized.
 - `RS_CI_LOCKFILE_TOOLCHAIN`: optional toolchain override for lockfile metadata and regeneration; defaults to `RS_CI_BUILD_TOOLCHAIN`.
 - `RS_CI_RUSTFMT_CONFIG`: rustfmt configuration path; defaults to `rustfmt.toml` beside the running CI script.
-- `RS_CI_CARGO_MATRIX_CONFIG`: project-relative path to the optional Cargo feature matrix config; defaults to `.rs-ci-cargo-matrix.json`.
+- `RS_CI_CARGO_MATRIX_CONFIG`: project-relative path to the optional Cargo compatibility matrix config; defaults to `.rs-ci-cargo-matrix.json`.
 - `RS_CI_CARGO_HOME_MODE`: Cargo cache mode for local scripts, either `project` or `shared`; defaults to `project` so parallel `rs-*` checks do not share Cargo package cache and index locks. Set it to `shared` to keep Cargo's normal global cache behavior.
 - `RS_CI_CARGO_HOME_ROOT`: root directory for per-project Cargo homes when `RS_CI_CARGO_HOME_MODE=project`; defaults to `$XDG_CACHE_HOME/rs-ci/cargo-home` or `$HOME/.cache/rs-ci/cargo-home`.
 - `RUN_COVERAGE_CFG_CLIPPY`: set to `1` to run clippy with `RUSTFLAGS="--cfg coverage"`.

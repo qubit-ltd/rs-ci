@@ -29,7 +29,7 @@ on:
         type: string
         default: "4096"
       cargo_feature_matrix_config:
-        description: Project-relative path to optional Cargo feature matrix config.
+        description: Project-relative path to optional Cargo compatibility matrix config.
         required: false
         type: string
         default: ".rs-ci-cargo-matrix.json"
@@ -515,7 +515,7 @@ jobs:
         run: echo "loom is not configured; skipping."
 
   prepare_cargo_feature_matrix:
-    name: Prepare Cargo feature matrix
+    name: Prepare Cargo compatibility matrix
     if: ${{ github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
 
@@ -537,7 +537,7 @@ jobs:
             sudo apt-get install -y jq
           fi
 
-      - name: Generate Cargo feature matrix
+      - name: Generate Cargo compatibility matrix
         id: matrix
         run: |
           set -euo pipefail
@@ -552,7 +552,7 @@ jobs:
           elif [ -x ./cargo-feature-check.sh ]; then
             MATRIX_SCRIPT=./cargo-feature-check.sh
           else
-            echo "Cargo feature matrix config exists, but cargo-feature-check.sh was not found" >&2
+            echo "Cargo compatibility matrix config exists, but cargo-feature-check.sh was not found" >&2
             exit 1
           fi
           matrix=$("$MATRIX_SCRIPT" github-matrix)
@@ -560,7 +560,7 @@ jobs:
           echo "has_matrix=true" >> "$GITHUB_OUTPUT"
 
   cargo_feature_matrix:
-    name: Cargo feature matrix (${{ matrix.name }})
+    name: Cargo compatibility matrix (${{ matrix.name }})
     if: ${{ github.event_name != 'schedule' && needs.prepare_cargo_feature_matrix.outputs.has_matrix == 'true' }}
     runs-on: ubuntu-latest
     needs:
@@ -576,9 +576,9 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare_cargo_feature_matrix.outputs.matrix) }}
 
     steps:
-      - name: No configured Cargo feature matrix
+      - name: No configured Cargo compatibility matrix
         if: ${{ matrix.enabled == false }}
-        run: echo "No .rs-ci-cargo-matrix.json found; using the default CI feature behavior."
+        run: echo "No .rs-ci-cargo-matrix.json found; using the default CI behavior."
 
       - name: Checkout source
         if: ${{ matrix.enabled == true }}
@@ -617,7 +617,7 @@ jobs:
             sudo apt-get install -y jq
           fi
 
-      - name: Run configured Cargo feature check
+      - name: Run configured Cargo compatibility check
         if: ${{ matrix.enabled == true }}
         run: .rs-ci/cargo-feature-check.sh run-index "${{ matrix.index }}"
 

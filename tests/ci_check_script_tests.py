@@ -12,6 +12,18 @@ ALIGN_CI_SCRIPT = REPO_ROOT / "align-ci.sh"
 
 
 class CiCheckScriptTests(unittest.TestCase):
+    def test_ci_check_runs_the_shared_cargo_compatibility_matrix(self) -> None:
+        script = CI_CHECK_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn(
+            'print_step "12/15 Running configured Cargo compatibility matrix"',
+            script,
+        )
+        self.assertIn(
+            '"$SCRIPT_DIR/cargo-feature-check.sh" run-all',
+            script,
+        )
+
     def run_format_block(
         self,
         script_path: Path,
