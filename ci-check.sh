@@ -20,6 +20,9 @@ source "$SCRIPT_DIR/toolchains.sh"
 configure_rs_ci_toolchains
 
 RUN_COVERAGE_CFG_CLIPPY="${RUN_COVERAGE_CFG_CLIPPY:-0}"
+RS_CI_ARTIFACT_CLEANUP_MODE="${RS_CI_ARTIFACT_CLEANUP_MODE:-always}"
+RS_CI_OWNS_TARGET_DIR=0
+PROJECT_ROOT=""
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -28,7 +31,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 TEMP_FILES=()
-cleanup() {
+cleanup_temp_files() {
     local file
     if [ "${#TEMP_FILES[@]}" -eq 0 ]; then
         return
@@ -36,6 +39,54 @@ cleanup() {
     for file in "${TEMP_FILES[@]}"; do
         [ -n "$file" ] && [ -f "$file" ] && command rm -f "$file"
     done
+}
+
+remove_ci_artifact_directory() {
+    local directory="$1"
+
+    if [ -d "$directory" ]; then
+        echo "Cleaning CI build artifacts: $directory"
+        if ! command rm -rf -- "$directory"; then
+            echo "warning: failed to clean CI build artifacts: $directory" >&2
+        fi
+    fi
+}
+
+cleanup_build_artifacts() {
+    local exit_status="$1"
+
+    case "$RS_CI_ARTIFACT_CLEANUP_MODE" in
+        always)
+            ;;
+        on-success)
+            if [ "$exit_status" -ne 0 ]; then
+                return 0
+            fi
+            ;;
+        never)
+            return 0
+            ;;
+        *)
+            echo "warning: invalid RS_CI_ARTIFACT_CLEANUP_MODE '$RS_CI_ARTIFACT_CLEANUP_MODE'; preserving build artifacts" >&2
+            return 0
+            ;;
+    esac
+
+    if [ "$RS_CI_OWNS_TARGET_DIR" = "1" ]; then
+        remove_ci_artifact_directory "$CARGO_TARGET_DIR"
+    fi
+    if [ -n "$PROJECT_ROOT" ]; then
+        remove_ci_artifact_directory "$PROJECT_ROOT/fuzz/target"
+        remove_ci_artifact_directory "$PROJECT_ROOT/target/llvm-cov"
+    fi
+}
+
+cleanup() {
+    local exit_status=$?
+
+    cleanup_temp_files
+    cleanup_build_artifacts "$exit_status"
+    return "$exit_status"
 }
 trap cleanup EXIT
 
@@ -164,6 +215,7 @@ run_security_audit() {
 
 RUSTFMT_CONFIG="${RS_CI_RUSTFMT_CONFIG:-$SCRIPT_DIR/rustfmt.toml}"
 PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
+PROJECT_ROOT=$(cd "$PROJECT_ROOT" && pwd -P)
 
 # shellcheck source=cargo-env.sh
 source "$SCRIPT_DIR/cargo-env.sh"
@@ -174,8 +226,18 @@ configure_rs_ci_cargo_home "$PROJECT_ROOT"
 # target directory can make rustdoc select an incompatible rlib/rmeta pair.
 if [ -z "${RS_CI_TARGET_DIR:-}" ]; then
     RS_CI_TARGET_DIR="$PROJECT_ROOT/target/rs-ci"
+    RS_CI_OWNS_TARGET_DIR=1
 fi
 export CARGO_TARGET_DIR="$RS_CI_TARGET_DIR"
+
+case "$RS_CI_ARTIFACT_CLEANUP_MODE" in
+    always | on-success | never)
+        ;;
+    *)
+        print_error "RS_CI_ARTIFACT_CLEANUP_MODE must be always, on-success, or never"
+        exit 1
+        ;;
+esac
 
 require_command cargo
 require_command rustup
@@ -198,6 +260,7 @@ if [ "${RS_CI_CARGO_HOME_MODE:-project}" = "project" ]; then
     echo "Cargo home: $CARGO_HOME"
 fi
 echo "Cargo target: $CARGO_TARGET_DIR"
+echo "Build artifact cleanup: $RS_CI_ARTIFACT_CLEANUP_MODE"
 echo ""
 
 print_step "Synchronizing Cargo.lock files"

@@ -12,6 +12,28 @@ ALIGN_CI_SCRIPT = REPO_ROOT / "align-ci.sh"
 
 
 class CiCheckScriptTests(unittest.TestCase):
+    def test_ci_check_configures_artifact_cleanup_policy(self) -> None:
+        script = CI_CHECK_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn(
+            'RS_CI_ARTIFACT_CLEANUP_MODE="${RS_CI_ARTIFACT_CLEANUP_MODE:-always}"',
+            script,
+        )
+        self.assertIn(
+            'always | on-success | never)',
+            script,
+        )
+        self.assertIn('cleanup_build_artifacts', script)
+        self.assertIn('"$PROJECT_ROOT/fuzz/target"', script)
+        self.assertIn('"$PROJECT_ROOT/target/llvm-cov"', script)
+
+    def test_ci_check_cleans_only_the_default_rs_ci_target_directory(self) -> None:
+        script = CI_CHECK_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('RS_CI_OWNS_TARGET_DIR=1', script)
+        self.assertIn('if [ "$RS_CI_OWNS_TARGET_DIR" = "1" ]; then', script)
+        self.assertIn('remove_ci_artifact_directory "$CARGO_TARGET_DIR"', script)
+
     def test_ci_check_runs_project_hook_before_packaging(self) -> None:
         script = CI_CHECK_SCRIPT.read_text(encoding="utf-8")
 
