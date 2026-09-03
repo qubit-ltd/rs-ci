@@ -18,7 +18,7 @@ class AdvancedChecksWorkflowTests(unittest.TestCase):
         workflow = WORKFLOW.read_text(encoding="utf-8")
         block = job_block(workflow, "build_test_coverage", "security_audit")
 
-        self.assertEqual(1, block.count("run-project-ci-check.sh"))
+        self.assertEqual(1, block.count("Run project-specific CI checks"))
         self.assertLess(
             block.index("Run project-specific CI checks"),
             block.index("Verify Cargo package"),
@@ -27,6 +27,10 @@ class AdvancedChecksWorkflowTests(unittest.TestCase):
             'RS_CI_PROJECT_ROOT="$PWD" .rs-ci/run-project-ci-check.sh',
             block,
         )
+        self.assertIn('elif [ -x ./run-project-ci-check.sh ]; then', block)
+        self.assertIn('elif [ -e ./project-ci-check.sh ]; then', block)
+        self.assertIn('if [ ! -x ./project-ci-check.sh ]; then', block)
+        self.assertIn("No project-specific CI hook found; skipping.", block)
 
     def test_cargo_matrix_reuses_resolved_toolchain_and_shared_checker(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
