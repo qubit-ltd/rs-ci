@@ -90,8 +90,9 @@ jobs:
 
 项目可以在仓库根目录增加可执行的 `project-ci-check.sh`，承载不适合放入共享 Rust
 流水线的检查。本地 `ci-check.sh` 和可复用 GitHub Actions workflow 会在兼容矩阵后、
-打包验证前，从项目根目录各执行一次该钩子。钩子会继承已经解析的
-`RS_CI_*_TOOLCHAIN` 环境变量。
+打包验证前，从项目根目录各执行一次该钩子。钩子会继承调用位置已有的 CI
+工具链环境：可复用构建任务会提供解析后的 `RS_CI_BUILD_TOOLCHAIN`，本地
+`ci-check.sh` 则会提供全部解析后的 `RS_CI_*_TOOLCHAIN` 变量。
 
 没有该钩子的项目保持默认流水线不变。文件存在但不可执行时，CI 会明确失败，
 不会静默跳过：

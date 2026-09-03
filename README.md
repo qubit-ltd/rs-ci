@@ -94,7 +94,9 @@ A project may add an executable `project-ci-check.sh` at its repository root
 for checks that do not belong in the shared Rust pipeline. Local `ci-check.sh`
 and the reusable GitHub Actions workflow run the hook once from that root after
 the compatibility matrix and before package verification. The hook inherits
-the resolved `RS_CI_*_TOOLCHAIN` environment variables.
+the CI toolchain environment available at the call site. In the reusable build
+job this includes the resolved `RS_CI_BUILD_TOOLCHAIN`; local `ci-check.sh`
+provides all resolved `RS_CI_*_TOOLCHAIN` variables.
 
 Projects without the hook keep the default pipeline unchanged. If the file is
 present but not executable, CI fails instead of silently skipping it:
