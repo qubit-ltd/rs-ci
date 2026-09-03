@@ -687,6 +687,9 @@ jobs:
             exit 1
           fi
 
+      - name: Run project-specific CI checks
+        run: RS_CI_PROJECT_ROOT="$PWD" .rs-ci/run-project-ci-check.sh
+
       - name: Verify Cargo package
         run: |
           set -euo pipefail

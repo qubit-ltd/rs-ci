@@ -14,6 +14,20 @@ def job_block(workflow: str, job: str, next_job: str) -> str:
 
 
 class AdvancedChecksWorkflowTests(unittest.TestCase):
+    def test_build_job_runs_project_hook_once_before_packaging(self) -> None:
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        block = job_block(workflow, "build_test_coverage", "security_audit")
+
+        self.assertEqual(1, block.count("run-project-ci-check.sh"))
+        self.assertLess(
+            block.index("Run project-specific CI checks"),
+            block.index("Verify Cargo package"),
+        )
+        self.assertIn(
+            'RS_CI_PROJECT_ROOT="$PWD" .rs-ci/run-project-ci-check.sh',
+            block,
+        )
+
     def test_cargo_matrix_reuses_resolved_toolchain_and_shared_checker(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
         block = job_block(workflow, "cargo_feature_matrix", "build_test_coverage")

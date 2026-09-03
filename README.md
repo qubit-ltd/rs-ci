@@ -20,6 +20,8 @@ Shared scripts and CircleCI/GitHub Actions configuration for checking Rust code 
 - `cargo-package-check.sh`: packages each publishable Cargo workspace member
   separately with `--allow-dirty`, preserving Cargo's workspace dependency
   staging while avoiding unused patch warnings.
+- `run-project-ci-check.sh`: runs an optional project-owned
+  `project-ci-check.sh` hook from the project root.
 - `readme-version-check.py`: checks dependency snippets in every workspace package README against Cargo-resolved `major.minor` versions.
 - `style-check.sh`: Rust source layout checks for Cargo workspace default members that rustfmt and clippy do not cover.
 - `coverage.sh`: local coverage report generator and threshold checker.
@@ -33,7 +35,7 @@ Shared scripts and CircleCI/GitHub Actions configuration for checking Rust code 
 Copy these files into the root of a Rust project:
 
 ```bash
-command cp align-ci.sh ci-check.sh cargo-env.sh cargo-lock-update.sh toolchains.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh rs-ci-metadata.sh cargo-miri-check.sh cargo-sanitizer-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
+command cp align-ci.sh ci-check.sh cargo-env.sh cargo-lock-update.sh toolchains.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh rs-ci-metadata.sh cargo-miri-check.sh cargo-sanitizer-check.sh cargo-package-check.sh run-project-ci-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
 command cp .circleci/config.yml <project-root>/.circleci/config.yml
 ```
 
@@ -41,7 +43,7 @@ Then run:
 
 ```bash
 cd <project-root>
-chmod +x align-ci.sh ci-check.sh cargo-lock-update.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh rs-ci-metadata.sh cargo-miri-check.sh cargo-sanitizer-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh
+chmod +x align-ci.sh ci-check.sh cargo-lock-update.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh rs-ci-metadata.sh cargo-miri-check.sh cargo-sanitizer-check.sh cargo-package-check.sh run-project-ci-check.sh readme-version-check.py style-check.sh coverage.sh
 ./style-check.sh
 ./ci-check.sh
 ```
@@ -84,6 +86,21 @@ jobs:
     with:
       run_windows_tests: true
       run_macos_tests: true
+```
+
+## Project-Specific Checks
+
+A project may add an executable `project-ci-check.sh` at its repository root
+for checks that do not belong in the shared Rust pipeline. Local `ci-check.sh`
+and the reusable GitHub Actions workflow run the hook once from that root after
+the compatibility matrix and before package verification. The hook inherits
+the resolved `RS_CI_*_TOOLCHAIN` environment variables.
+
+Projects without the hook keep the default pipeline unchanged. If the file is
+present but not executable, CI fails instead of silently skipping it:
+
+```bash
+chmod +x project-ci-check.sh
 ```
 
 Add CI and coverage badges to the Rust project's README:

@@ -12,6 +12,19 @@ ALIGN_CI_SCRIPT = REPO_ROOT / "align-ci.sh"
 
 
 class CiCheckScriptTests(unittest.TestCase):
+    def test_ci_check_runs_project_hook_before_packaging(self) -> None:
+        script = CI_CHECK_SCRIPT.read_text(encoding="utf-8")
+
+        hook_step = script.index("Running project-specific CI checks")
+        package_step = script.index("Verifying Cargo package")
+
+        self.assertLess(hook_step, package_step)
+        self.assertIn(
+            'RS_CI_PROJECT_ROOT="$PROJECT_ROOT" '
+            '"$SCRIPT_DIR/run-project-ci-check.sh"',
+            script,
+        )
+
     def test_ci_check_runs_the_shared_cargo_compatibility_matrix(self) -> None:
         script = CI_CHECK_SCRIPT.read_text(encoding="utf-8")
 

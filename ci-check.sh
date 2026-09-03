@@ -378,6 +378,12 @@ fi
 print_success "Configured Cargo compatibility matrix checks passed"
 echo ""
 
+print_step "12b/15 Running project-specific CI checks"
+require_executable_file "$SCRIPT_DIR/run-project-ci-check.sh"
+RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/run-project-ci-check.sh"
+print_success "Project-specific CI checks passed"
+echo ""
+
 print_step "13/15 Verifying Cargo package"
 require_executable_file "$SCRIPT_DIR/cargo-package-check.sh"
 RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/cargo-package-check.sh"

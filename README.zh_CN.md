@@ -19,6 +19,8 @@
 - `cargo-sanitizer-check.sh`：按条件运行的 sanitizer 测试脚本。
 - `cargo-package-check.sh`：分别使用带 `--allow-dirty` 的 Cargo 调用打包每个可发布的
   workspace member，在保留 Cargo workspace 依赖暂存机制的同时避免未使用 patch warning。
+- `run-project-ci-check.sh`：从项目根目录运行可选的项目自有
+  `project-ci-check.sh` 钩子。
 - `readme-version-check.py`：检查所有 workspace package README 的依赖片段是否匹配 Cargo 解析后的 `major.minor` 版本。
 - `style-check.sh`：检查 Cargo workspace default members 中 rustfmt 和 clippy 不覆盖的 Rust 源码布局约束。
 - `coverage.sh`：本地覆盖率报告生成和阈值检查脚本。
@@ -32,7 +34,7 @@
 把这些文件复制到 Rust 项目根目录：
 
 ```bash
-command cp align-ci.sh ci-check.sh cargo-env.sh cargo-lock-update.sh toolchains.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh rs-ci-metadata.sh cargo-miri-check.sh cargo-sanitizer-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
+command cp align-ci.sh ci-check.sh cargo-env.sh cargo-lock-update.sh toolchains.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh rs-ci-metadata.sh cargo-miri-check.sh cargo-sanitizer-check.sh cargo-package-check.sh run-project-ci-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
 command cp .circleci/config.yml <project-root>/.circleci/config.yml
 ```
 
@@ -40,7 +42,7 @@ command cp .circleci/config.yml <project-root>/.circleci/config.yml
 
 ```bash
 cd <project-root>
-chmod +x align-ci.sh ci-check.sh cargo-lock-update.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh rs-ci-metadata.sh cargo-miri-check.sh cargo-sanitizer-check.sh cargo-package-check.sh readme-version-check.py style-check.sh coverage.sh
+chmod +x align-ci.sh ci-check.sh cargo-lock-update.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh rs-ci-metadata.sh cargo-miri-check.sh cargo-sanitizer-check.sh cargo-package-check.sh run-project-ci-check.sh readme-version-check.py style-check.sh coverage.sh
 ./style-check.sh
 ./ci-check.sh
 ```
@@ -82,6 +84,20 @@ jobs:
     with:
       run_windows_tests: true
       run_macos_tests: true
+```
+
+## 项目专属检查
+
+项目可以在仓库根目录增加可执行的 `project-ci-check.sh`，承载不适合放入共享 Rust
+流水线的检查。本地 `ci-check.sh` 和可复用 GitHub Actions workflow 会在兼容矩阵后、
+打包验证前，从项目根目录各执行一次该钩子。钩子会继承已经解析的
+`RS_CI_*_TOOLCHAIN` 环境变量。
+
+没有该钩子的项目保持默认流水线不变。文件存在但不可执行时，CI 会明确失败，
+不会静默跳过：
+
+```bash
+chmod +x project-ci-check.sh
 ```
 
 在 Rust 项目的 README 中加入 CI 和 coverage badge：
