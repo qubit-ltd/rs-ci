@@ -179,7 +179,7 @@ run_style_checks() {
     fi
 }
 
-# Purpose: Run style rules for Cargo workspace default members.
+# Purpose: Run style rules for every Cargo workspace member.
 run_workspace_style_checks() {
     local metadata
     local package_rows
@@ -195,7 +195,7 @@ run_workspace_style_checks() {
     metadata=$(cargo +"$RS_CI_BUILD_TOOLCHAIN" metadata --no-deps --format-version 1)
     package_rows=$(jq -r '
         . as $metadata
-        | .workspace_default_members[] as $member_id
+        | .workspace_members[] as $member_id
         | .packages[]
         | select(.id == $member_id)
         | [.name, .manifest_path]
