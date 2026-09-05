@@ -168,7 +168,7 @@ class CargoFeatureCheckTests(unittest.TestCase):
             self.assertEqual(0, result.returncode, result.stderr)
             self.assertIn("update -p serde_json --precise 1.0.151", commands)
             self.assertIn("metadata --locked --format-version 1", commands)
-            self.assertIn("test --all-features --locked", commands)
+            self.assertIn("test --workspace --all-features --locked", commands)
             self.assertIn("cargo +1.94.0 test --all-features --locked", result.stdout)
             self.assertEqual(original_lock, (project_root / "Cargo.lock").read_bytes())
 

@@ -367,7 +367,7 @@ class StyleCheckScriptTests(unittest.TestCase):
         self.assertEqual(1, result.returncode)
         self.assertIn("production_function", result.stdout)
 
-    def test_workspace_default_members_are_checked(self) -> None:
+    def test_workspace_members_are_checked(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project_root = Path(temp_dir)
             (project_root / "first" / "src").mkdir(parents=True)

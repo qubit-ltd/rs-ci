@@ -132,7 +132,7 @@ class CiCheckScriptTests(unittest.TestCase):
     ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
         return self.run_format_block(
             CI_CHECK_SCRIPT,
-            'if cargo +"$RS_CI_FMT_TOOLCHAIN" fmt \\\n    --manifest-path "$PROJECT_ROOT/Cargo.toml" \\\n',
+            'if cargo +"$RS_CI_FMT_TOOLCHAIN" fmt \\\n    --all \\\n    --manifest-path "$PROJECT_ROOT/Cargo.toml" \\\n',
             '\necho ""\n\nprint_step "2/15',
             has_fuzz_manifest=has_fuzz_manifest,
             fail_fuzz_format=fail_fuzz_format,
@@ -146,7 +146,7 @@ class CiCheckScriptTests(unittest.TestCase):
     ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
         return self.run_format_block(
             ALIGN_CI_SCRIPT,
-            'echo "==> cargo +$RS_CI_FMT_TOOLCHAIN fmt --manifest-path',
+            'echo "==> cargo +$RS_CI_FMT_TOOLCHAIN fmt --all --manifest-path',
             '\necho "==> cargo +$RS_CI_CLIPPY_TOOLCHAIN clippy --fix',
             has_fuzz_manifest=has_fuzz_manifest,
             fail_fuzz_format=fail_fuzz_format,
@@ -291,11 +291,11 @@ class CiCheckScriptTests(unittest.TestCase):
 
         self.assertLess(default_step, all_feature_step)
         self.assertIn(
-            'cargo +"$RS_CI_BUILD_TOOLCHAIN" test --verbose',
+            'cargo +"$RS_CI_BUILD_TOOLCHAIN" test --workspace --verbose',
             script[default_step:all_feature_step],
         )
         self.assertIn(
-            'cargo +"$RS_CI_BUILD_TOOLCHAIN" test --all-features --verbose',
+            'cargo +"$RS_CI_BUILD_TOOLCHAIN" test --workspace --all-features --verbose',
             script[all_feature_step:],
         )
 
@@ -370,7 +370,7 @@ class CiCheckScriptTests(unittest.TestCase):
         )
         self.assertEqual(
             2,
-            script.count("doc --all-features --no-deps --verbose"),
+            script.count("doc --workspace --all-features --no-deps --verbose"),
         )
 
 
