@@ -100,8 +100,9 @@ ensure_executable_file "$SCRIPT_DIR/cargo-lock-update.sh"
 echo "==> synchronizing Cargo.lock files"
 RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/cargo-lock-update.sh"
 
-echo "==> cargo +$RS_CI_FMT_TOOLCHAIN fmt --manifest-path $PROJECT_ROOT/Cargo.toml -- --config-path $RUSTFMT_CONFIG"
+echo "==> cargo +$RS_CI_FMT_TOOLCHAIN fmt --all --manifest-path $PROJECT_ROOT/Cargo.toml -- --config-path $RUSTFMT_CONFIG"
 cargo +"$RS_CI_FMT_TOOLCHAIN" fmt \
+    --all \
     --manifest-path "$PROJECT_ROOT/Cargo.toml" \
     -- --config-path "$RUSTFMT_CONFIG"
 if [ -f "$PROJECT_ROOT/fuzz/Cargo.toml" ]; then
