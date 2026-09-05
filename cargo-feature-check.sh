@@ -188,6 +188,9 @@ build_feature_args() {
     while IFS= read -r package; do
         [ -n "$package" ] && PACKAGE_ARGS+=(--package "$package")
     done < <(jq -r --argjson index "$index" '.checks[$index].packages[]?' "$CONFIG_FILE")
+    if [ "${#PACKAGE_ARGS[@]}" -eq 0 ]; then
+        PACKAGE_ARGS+=(--workspace)
+    fi
     if [ "$all_features" = "true" ]; then
         FEATURE_ARGS+=(--all-features)
     else

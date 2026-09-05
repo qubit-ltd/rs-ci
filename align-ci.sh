@@ -111,15 +111,15 @@ if [ -f "$PROJECT_ROOT/fuzz/Cargo.toml" ]; then
         -- --config-path "$RUSTFMT_CONFIG"
 fi
 
-echo "==> cargo +$RS_CI_CLIPPY_TOOLCHAIN clippy --fix (all targets / features)"
-cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --fix --allow-dirty --allow-staged --all-targets --all-features
+echo "==> cargo +$RS_CI_CLIPPY_TOOLCHAIN clippy --fix --workspace (all targets / features)"
+cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --fix --workspace --allow-dirty --allow-staged --all-targets --all-features
 
-echo "==> cargo +$RS_CI_CLIPPY_TOOLCHAIN clippy (verify, -D warnings)"
-cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
+echo "==> cargo +$RS_CI_CLIPPY_TOOLCHAIN clippy --workspace (verify, -D warnings)"
+cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --workspace --all-targets --all-features -- -D warnings
 
 if [ "$RUN_COVERAGE_CFG_CLIPPY" = "1" ]; then
     echo "==> RUSTFLAGS=--cfg coverage cargo +$RS_CI_CLIPPY_TOOLCHAIN clippy"
-    RUSTFLAGS="--cfg coverage" cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
+    RUSTFLAGS="--cfg coverage" cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --workspace --all-targets --all-features -- -D warnings
 fi
 
 if [ "$RUN_COVERAGE_IN_ALIGN" = "1" ]; then

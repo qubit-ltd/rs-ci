@@ -172,7 +172,7 @@ run_clippy() {
     log_file=$(mktemp -t rs-ci-clippy.XXXXXX)
     TEMP_FILES+=("$log_file")
 
-    if cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings 2>&1 | tee "$log_file"; then
+    if cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --workspace --all-targets --all-features -- -D warnings 2>&1 | tee "$log_file"; then
         print_success "Clippy checks passed"
     else
         print_error "Clippy found issues"
@@ -301,7 +301,7 @@ print_step "2/15 Running Clippy checks (cargo +$RS_CI_CLIPPY_TOOLCHAIN clippy)"
 run_clippy
 if [ "$RUN_COVERAGE_CFG_CLIPPY" = "1" ]; then
     print_step "2b/15 Running Clippy checks with RUSTFLAGS=--cfg coverage"
-    RUSTFLAGS="--cfg coverage" cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --all-targets --all-features -- -D warnings
+    RUSTFLAGS="--cfg coverage" cargo +"$RS_CI_CLIPPY_TOOLCHAIN" clippy --workspace --all-targets --all-features -- -D warnings
     print_success "Coverage cfg clippy checks passed"
 fi
 echo ""
@@ -314,25 +314,25 @@ echo ""
 
 print_step "4/15 Building project (cargo +$RS_CI_BUILD_TOOLCHAIN)"
 ensure_build_toolchain
-if cargo +"$RS_CI_BUILD_TOOLCHAIN" build --verbose > /dev/null 2>&1; then
+if cargo +"$RS_CI_BUILD_TOOLCHAIN" build --workspace --verbose > /dev/null 2>&1; then
     print_success "Debug build succeeded"
 else
     print_error "Debug build failed"
-    cargo +"$RS_CI_BUILD_TOOLCHAIN" build --verbose
+    cargo +"$RS_CI_BUILD_TOOLCHAIN" build --workspace --verbose
     exit 1
 fi
 
-if cargo +"$RS_CI_BUILD_TOOLCHAIN" build --release --verbose > /dev/null 2>&1; then
+if cargo +"$RS_CI_BUILD_TOOLCHAIN" build --workspace --release --verbose > /dev/null 2>&1; then
     print_success "Release build succeeded"
 else
     print_error "Release build failed"
-    cargo +"$RS_CI_BUILD_TOOLCHAIN" build --release --verbose
+    cargo +"$RS_CI_BUILD_TOOLCHAIN" build --workspace --release --verbose
     exit 1
 fi
 echo ""
 
 print_step "5/15 Running default-feature tests (cargo +$RS_CI_BUILD_TOOLCHAIN test)"
-if cargo +"$RS_CI_BUILD_TOOLCHAIN" test --verbose; then
+if cargo +"$RS_CI_BUILD_TOOLCHAIN" test --workspace --verbose; then
     print_success "Default-feature tests passed"
 else
     print_error "Default-feature tests failed"
@@ -341,7 +341,7 @@ fi
 echo ""
 
 print_step "5b/15 Running all-feature tests (cargo +$RS_CI_BUILD_TOOLCHAIN test --all-features)"
-if cargo +"$RS_CI_BUILD_TOOLCHAIN" test --all-features --verbose; then
+if cargo +"$RS_CI_BUILD_TOOLCHAIN" test --workspace --all-features --verbose; then
     print_success "All tests passed"
 else
     print_error "Tests failed"
@@ -405,11 +405,11 @@ print_success "Conditional Loom model checks passed"
 echo ""
 
 print_step "10/15 Building all-feature documentation with warnings and missing docs denied"
-if RUSTDOCFLAGS="-D warnings -D missing-docs" cargo +"$RS_CI_BUILD_TOOLCHAIN" doc --all-features --no-deps --verbose > /dev/null 2>&1; then
+if RUSTDOCFLAGS="-D warnings -D missing-docs" cargo +"$RS_CI_BUILD_TOOLCHAIN" doc --workspace --all-features --no-deps --verbose > /dev/null 2>&1; then
     print_success "Documentation build passed"
 else
     print_error "Documentation build failed"
-    RUSTDOCFLAGS="-D warnings -D missing-docs" cargo +"$RS_CI_BUILD_TOOLCHAIN" doc --all-features --no-deps --verbose
+    RUSTDOCFLAGS="-D warnings -D missing-docs" cargo +"$RS_CI_BUILD_TOOLCHAIN" doc --workspace --all-features --no-deps --verbose
     exit 1
 fi
 echo ""
