@@ -367,7 +367,6 @@ generate_json_coverage_summary() {
     configure_coverage_target_directories "$PROJECT_ROOT"
     echo "Generating JSON coverage summary"
     cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov report \
-        "${LLVM_COV_TARGET_ARGS[@]}" \
         "${CARGO_REPORT_ARGS[@]}" \
         --json --output-path "$RS_CI_LLVM_COV_REPORT_DIR/coverage.json" \
         --ignore-filename-regex "$EXCLUDE_PATTERN"
@@ -920,7 +919,6 @@ PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
 PROJECT_ROOT=$(cd "$PROJECT_ROOT" && pwd -P)
 cd "$PROJECT_ROOT"
 configure_coverage_target_directories "$PROJECT_ROOT"
-LLVM_COV_TARGET_ARGS=(--target-dir "$RS_CI_LLVM_COV_TARGET_DIR")
 
 if [ ! -f Cargo.toml ]; then
     echo "error: Cargo.toml not found in project root: $PROJECT_ROOT" >&2
@@ -1012,7 +1010,7 @@ fi
 
 if [ "$CLEAN_FLAG" = "yes" ]; then
     echo "Cleaning old coverage data"
-    cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov clean "${LLVM_COV_TARGET_ARGS[@]}"
+    cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov clean
 else
     echo "Using cached build data; pass --clean to clean first"
 fi
@@ -1027,7 +1025,6 @@ case "$FORMAT_ARG" in
             html_open_args=(--open)
         fi
         cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov \
-            "${LLVM_COV_TARGET_ARGS[@]}" \
             "${CARGO_COLLECTION_ARGS[@]}" \
             "${COVERAGE_FEATURE_ARGS[@]}" \
             --html --output-dir "$RS_CI_LLVM_COV_REPORT_DIR" \
@@ -1040,7 +1037,6 @@ case "$FORMAT_ARG" in
     text)
         echo "Generating text coverage report"
         cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov \
-            "${LLVM_COV_TARGET_ARGS[@]}" \
             "${CARGO_COLLECTION_ARGS[@]}" \
             "${COVERAGE_FEATURE_ARGS[@]}" \
             --ignore-filename-regex "$EXCLUDE_PATTERN" \
@@ -1052,7 +1048,6 @@ case "$FORMAT_ARG" in
     lcov)
         echo "Generating LCOV coverage report"
         cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov \
-            "${LLVM_COV_TARGET_ARGS[@]}" \
             "${CARGO_COLLECTION_ARGS[@]}" \
             "${COVERAGE_FEATURE_ARGS[@]}" \
             --lcov --output-path "$RS_CI_LLVM_COV_REPORT_DIR/lcov.info" \
@@ -1064,7 +1059,6 @@ case "$FORMAT_ARG" in
     json)
         echo "Generating JSON coverage report"
         cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov \
-            "${LLVM_COV_TARGET_ARGS[@]}" \
             "${CARGO_COLLECTION_ARGS[@]}" \
             "${COVERAGE_FEATURE_ARGS[@]}" \
             --json --output-path "$RS_CI_LLVM_COV_REPORT_DIR/coverage.json" \
@@ -1076,7 +1070,6 @@ case "$FORMAT_ARG" in
     cobertura)
         echo "Generating Cobertura XML coverage report"
         cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov \
-            "${LLVM_COV_TARGET_ARGS[@]}" \
             "${CARGO_COLLECTION_ARGS[@]}" \
             "${COVERAGE_FEATURE_ARGS[@]}" \
             --cobertura --output-path "$RS_CI_LLVM_COV_REPORT_DIR/cobertura.xml" \
@@ -1090,7 +1083,6 @@ case "$FORMAT_ARG" in
 
         echo "  - collecting coverage data"
         cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov \
-            "${LLVM_COV_TARGET_ARGS[@]}" \
             "${CARGO_COLLECTION_ARGS[@]}" \
             "${COVERAGE_FEATURE_ARGS[@]}" \
             --no-report \
@@ -1098,21 +1090,18 @@ case "$FORMAT_ARG" in
 
         echo "  - HTML"
         cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov report \
-            "${LLVM_COV_TARGET_ARGS[@]}" \
             "${CARGO_REPORT_ARGS[@]}" \
             --html --output-dir "$RS_CI_LLVM_COV_REPORT_DIR" \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
 
         echo "  - LCOV"
         cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov report \
-            "${LLVM_COV_TARGET_ARGS[@]}" \
             "${CARGO_REPORT_ARGS[@]}" \
             --lcov --output-path "$RS_CI_LLVM_COV_REPORT_DIR/lcov.info" \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
 
         echo "  - JSON"
         cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov report \
-            "${LLVM_COV_TARGET_ARGS[@]}" \
             "${CARGO_REPORT_ARGS[@]}" \
             --json --output-path "$RS_CI_LLVM_COV_REPORT_DIR/coverage.json" \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
@@ -1120,14 +1109,12 @@ case "$FORMAT_ARG" in
 
         echo "  - Cobertura"
         cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov report \
-            "${LLVM_COV_TARGET_ARGS[@]}" \
             "${CARGO_REPORT_ARGS[@]}" \
             --cobertura --output-path "$RS_CI_LLVM_COV_REPORT_DIR/cobertura.xml" \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
 
         echo "  - text"
         cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov report \
-            "${LLVM_COV_TARGET_ARGS[@]}" \
             "${CARGO_REPORT_ARGS[@]}" \
             --text \
             --ignore-filename-regex "$EXCLUDE_PATTERN" \

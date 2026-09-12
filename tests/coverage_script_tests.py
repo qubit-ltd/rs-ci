@@ -119,6 +119,14 @@ def write_fake_tools(bin_dir: Path, log_path: Path) -> None:
             printf 'LLVM_COV=%s\\n' "${{LLVM_COV-<unset>}}" >> "{log_path}"
             printf 'LLVM_PROFDATA=%s\\n' "${{LLVM_PROFDATA-<unset>}}" >> "{log_path}"
             printf 'ARGS=%s\\n' "$*" >> "{log_path}"
+            if [ "${{FAKE_REJECT_TARGET_DIR:-0}}" = "1" ]; then
+                for argument in "$@"; do
+                    if [ "$argument" = "--target-dir" ]; then
+                        echo "error: invalid option '--target-dir'" >&2
+                        exit 1
+                    fi
+                done
+            fi
             if [ -n "${{FAKE_COVERAGE_JSON:-}}" ]; then
                 previous=""
                 for argument in "$@"; do
@@ -169,6 +177,34 @@ def run_coverage(
 
 
 class CoverageScriptTests(unittest.TestCase):
+    def test_uses_cargo_target_dir_without_unsupported_target_dir_option(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "project"
+            root.mkdir()
+            write_project(root)
+            fake_bin = Path(tmp) / "bin"
+            fake_bin.mkdir()
+            log_path = Path(tmp) / "cargo.log"
+            write_fake_tools(fake_bin, log_path)
+
+            coverage_fixture = Path(tmp) / "coverage.json"
+            write_coverage_fixture(
+                coverage_fixture,
+                [coverage_file(root / "src" / "lib.rs")],
+            )
+
+            result = run_coverage(
+                root,
+                fake_bin,
+                {
+                    "CARGO_TARGET_DIR": str(root / "target" / "rs-ci"),
+                    "FAKE_COVERAGE_JSON": str(coverage_fixture),
+                    "FAKE_REJECT_TARGET_DIR": "1",
+                },
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_prints_summary_for_every_report_format(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "project"
