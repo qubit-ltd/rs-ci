@@ -347,13 +347,31 @@ maybe_check_json_coverage() {
     fi
 }
 
+configure_coverage_target_directories() {
+    local project_root="$1"
+
+    if [ -n "${RS_CI_LLVM_COV_REPORT_DIR:-}" ]; then
+        return 0
+    fi
+
+    if [ -n "${CARGO_TARGET_DIR:-}" ]; then
+        RS_CI_LLVM_COV_TARGET_DIR="$CARGO_TARGET_DIR/llvm-cov-target"
+        RS_CI_LLVM_COV_REPORT_DIR="$CARGO_TARGET_DIR/llvm-cov"
+    else
+        RS_CI_LLVM_COV_TARGET_DIR="$project_root/target/llvm-cov-target"
+        RS_CI_LLVM_COV_REPORT_DIR="$project_root/target/llvm-cov"
+    fi
+}
+
 generate_json_coverage_summary() {
+    configure_coverage_target_directories "$PROJECT_ROOT"
     echo "Generating JSON coverage summary"
     cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov report \
+        "${LLVM_COV_TARGET_ARGS[@]}" \
         "${CARGO_REPORT_ARGS[@]}" \
-        --json --output-path target/llvm-cov/coverage.json \
+        --json --output-path "$RS_CI_LLVM_COV_REPORT_DIR/coverage.json" \
         --ignore-filename-regex "$EXCLUDE_PATTERN"
-    print_and_validate_json_coverage target/llvm-cov/coverage.json
+    print_and_validate_json_coverage "$RS_CI_LLVM_COV_REPORT_DIR/coverage.json"
 }
 
 build_coverage_plan() {
@@ -901,6 +919,8 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
 PROJECT_ROOT=$(cd "$PROJECT_ROOT" && pwd -P)
 cd "$PROJECT_ROOT"
+configure_coverage_target_directories "$PROJECT_ROOT"
+LLVM_COV_TARGET_ARGS=(--target-dir "$RS_CI_LLVM_COV_TARGET_DIR")
 
 if [ ! -f Cargo.toml ]; then
     echo "error: Cargo.toml not found in project root: $PROJECT_ROOT" >&2
@@ -992,12 +1012,12 @@ fi
 
 if [ "$CLEAN_FLAG" = "yes" ]; then
     echo "Cleaning old coverage data"
-    cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov clean
+    cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov clean "${LLVM_COV_TARGET_ARGS[@]}"
 else
     echo "Using cached build data; pass --clean to clean first"
 fi
 
-mkdir -p target/llvm-cov
+mkdir -p "$RS_CI_LLVM_COV_REPORT_DIR"
 
 case "$FORMAT_ARG" in
     html)
@@ -1007,56 +1027,61 @@ case "$FORMAT_ARG" in
             html_open_args=(--open)
         fi
         cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov \
+            "${LLVM_COV_TARGET_ARGS[@]}" \
             "${CARGO_COLLECTION_ARGS[@]}" \
             "${COVERAGE_FEATURE_ARGS[@]}" \
-            --html --output-dir target/llvm-cov \
+            --html --output-dir "$RS_CI_LLVM_COV_REPORT_DIR" \
             "${html_open_args[@]}" \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
-        echo "HTML report: target/llvm-cov/html/index.html"
+        echo "HTML report: $RS_CI_LLVM_COV_REPORT_DIR/html/index.html"
         generate_json_coverage_summary
         ;;
 
     text)
         echo "Generating text coverage report"
         cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov \
+            "${LLVM_COV_TARGET_ARGS[@]}" \
             "${CARGO_COLLECTION_ARGS[@]}" \
             "${COVERAGE_FEATURE_ARGS[@]}" \
             --ignore-filename-regex "$EXCLUDE_PATTERN" \
-            | tee target/llvm-cov/coverage.txt
-        echo "Text report: target/llvm-cov/coverage.txt"
+            | tee "$RS_CI_LLVM_COV_REPORT_DIR/coverage.txt"
+        echo "Text report: $RS_CI_LLVM_COV_REPORT_DIR/coverage.txt"
         generate_json_coverage_summary
         ;;
 
     lcov)
         echo "Generating LCOV coverage report"
         cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov \
+            "${LLVM_COV_TARGET_ARGS[@]}" \
             "${CARGO_COLLECTION_ARGS[@]}" \
             "${COVERAGE_FEATURE_ARGS[@]}" \
-            --lcov --output-path target/llvm-cov/lcov.info \
+            --lcov --output-path "$RS_CI_LLVM_COV_REPORT_DIR/lcov.info" \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
-        echo "LCOV report: target/llvm-cov/lcov.info"
+        echo "LCOV report: $RS_CI_LLVM_COV_REPORT_DIR/lcov.info"
         generate_json_coverage_summary
         ;;
 
     json)
         echo "Generating JSON coverage report"
         cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov \
+            "${LLVM_COV_TARGET_ARGS[@]}" \
             "${CARGO_COLLECTION_ARGS[@]}" \
             "${COVERAGE_FEATURE_ARGS[@]}" \
-            --json --output-path target/llvm-cov/coverage.json \
+            --json --output-path "$RS_CI_LLVM_COV_REPORT_DIR/coverage.json" \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
-        maybe_check_json_coverage target/llvm-cov/coverage.json
-        echo "JSON report: target/llvm-cov/coverage.json"
+        maybe_check_json_coverage "$RS_CI_LLVM_COV_REPORT_DIR/coverage.json"
+        echo "JSON report: $RS_CI_LLVM_COV_REPORT_DIR/coverage.json"
         ;;
 
     cobertura)
         echo "Generating Cobertura XML coverage report"
         cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov \
+            "${LLVM_COV_TARGET_ARGS[@]}" \
             "${CARGO_COLLECTION_ARGS[@]}" \
             "${COVERAGE_FEATURE_ARGS[@]}" \
-            --cobertura --output-path target/llvm-cov/cobertura.xml \
+            --cobertura --output-path "$RS_CI_LLVM_COV_REPORT_DIR/cobertura.xml" \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
-        echo "Cobertura report: target/llvm-cov/cobertura.xml"
+        echo "Cobertura report: $RS_CI_LLVM_COV_REPORT_DIR/cobertura.xml"
         generate_json_coverage_summary
         ;;
 
@@ -1065,6 +1090,7 @@ case "$FORMAT_ARG" in
 
         echo "  - collecting coverage data"
         cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov \
+            "${LLVM_COV_TARGET_ARGS[@]}" \
             "${CARGO_COLLECTION_ARGS[@]}" \
             "${COVERAGE_FEATURE_ARGS[@]}" \
             --no-report \
@@ -1072,42 +1098,47 @@ case "$FORMAT_ARG" in
 
         echo "  - HTML"
         cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov report \
+            "${LLVM_COV_TARGET_ARGS[@]}" \
             "${CARGO_REPORT_ARGS[@]}" \
-            --html --output-dir target/llvm-cov \
+            --html --output-dir "$RS_CI_LLVM_COV_REPORT_DIR" \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
 
         echo "  - LCOV"
         cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov report \
+            "${LLVM_COV_TARGET_ARGS[@]}" \
             "${CARGO_REPORT_ARGS[@]}" \
-            --lcov --output-path target/llvm-cov/lcov.info \
+            --lcov --output-path "$RS_CI_LLVM_COV_REPORT_DIR/lcov.info" \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
 
         echo "  - JSON"
         cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov report \
+            "${LLVM_COV_TARGET_ARGS[@]}" \
             "${CARGO_REPORT_ARGS[@]}" \
-            --json --output-path target/llvm-cov/coverage.json \
+            --json --output-path "$RS_CI_LLVM_COV_REPORT_DIR/coverage.json" \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
-        maybe_check_json_coverage target/llvm-cov/coverage.json
+        maybe_check_json_coverage "$RS_CI_LLVM_COV_REPORT_DIR/coverage.json"
 
         echo "  - Cobertura"
         cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov report \
+            "${LLVM_COV_TARGET_ARGS[@]}" \
             "${CARGO_REPORT_ARGS[@]}" \
-            --cobertura --output-path target/llvm-cov/cobertura.xml \
+            --cobertura --output-path "$RS_CI_LLVM_COV_REPORT_DIR/cobertura.xml" \
             --ignore-filename-regex "$EXCLUDE_PATTERN"
 
         echo "  - text"
         cargo +"$RS_CI_BUILD_TOOLCHAIN" llvm-cov report \
+            "${LLVM_COV_TARGET_ARGS[@]}" \
             "${CARGO_REPORT_ARGS[@]}" \
             --text \
             --ignore-filename-regex "$EXCLUDE_PATTERN" \
-            | tee target/llvm-cov/coverage.txt
+            | tee "$RS_CI_LLVM_COV_REPORT_DIR/coverage.txt"
 
         echo "Reports:"
-        echo "  HTML:      target/llvm-cov/html/index.html"
-        echo "  LCOV:      target/llvm-cov/lcov.info"
-        echo "  JSON:      target/llvm-cov/coverage.json"
-        echo "  Cobertura: target/llvm-cov/cobertura.xml"
-        echo "  Text:      target/llvm-cov/coverage.txt"
+        echo "  HTML:      $RS_CI_LLVM_COV_REPORT_DIR/html/index.html"
+        echo "  LCOV:      $RS_CI_LLVM_COV_REPORT_DIR/lcov.info"
+        echo "  JSON:      $RS_CI_LLVM_COV_REPORT_DIR/coverage.json"
+        echo "  Cobertura: $RS_CI_LLVM_COV_REPORT_DIR/cobertura.xml"
+        echo "  Text:      $RS_CI_LLVM_COV_REPORT_DIR/coverage.txt"
         ;;
 esac
 
