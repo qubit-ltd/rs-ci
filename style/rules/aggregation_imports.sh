@@ -157,7 +157,7 @@ scan_aggregation_file_items() {
             pending_test_module = 1
             next
         }
-        /^[[:space:]]*#\[[[:space:]]*proc_macro(_attribute|_derive)?([[:space:](]|$)/ {
+        /^[[:space:]]*#\[[[:space:]]*proc_macro(_attribute|_derive)?([[:space:](\]]|$)/ {
             proc_macro_entrypoint = 1
             next
         }
