@@ -26,6 +26,8 @@ class CiCheckScriptTests(unittest.TestCase):
         self.assertIn('cleanup_build_artifacts', script)
         self.assertIn('"$PROJECT_ROOT/fuzz/target"', script)
         self.assertIn('"$PROJECT_ROOT/target/llvm-cov"', script)
+        self.assertIn('"$PROJECT_ROOT/target/llvm-cov-target"', script)
+        self.assertIn('"$PROJECT_ROOT/target/rs-ci-feature-matrix"', script)
 
     def test_ci_check_cleans_only_the_default_rs_ci_target_directory(self) -> None:
         script = CI_CHECK_SCRIPT.read_text(encoding="utf-8")

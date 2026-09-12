@@ -78,6 +78,8 @@ cleanup_build_artifacts() {
     if [ -n "$PROJECT_ROOT" ]; then
         remove_ci_artifact_directory "$PROJECT_ROOT/fuzz/target"
         remove_ci_artifact_directory "$PROJECT_ROOT/target/llvm-cov"
+        remove_ci_artifact_directory "$PROJECT_ROOT/target/llvm-cov-target"
+        remove_ci_artifact_directory "$PROJECT_ROOT/target/rs-ci-feature-matrix"
     fi
 }
 
