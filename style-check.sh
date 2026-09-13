@@ -248,7 +248,9 @@ main() {
     require_command tr
     require_command wc
 
-    PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$script_dir}"
+    # shellcheck source=project-root.sh
+    source "$script_dir/project-root.sh"
+    PROJECT_ROOT=$(rs_ci_project_root "$script_dir")
     # Resolve symlinks so paths from cargo metadata and find share one root.
     PROJECT_ROOT=$(cd "$PROJECT_ROOT" && pwd -P)
     if [ -z "$STYLE_ALLOWLIST_FILE" ]; then

@@ -35,7 +35,9 @@ else
 fi
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
+# shellcheck source=project-root.sh
+source "$SCRIPT_DIR/project-root.sh"
+PROJECT_ROOT=$(rs_ci_project_root "$SCRIPT_DIR")
 METADATA_SCRIPT="$SCRIPT_DIR/rs-ci-metadata.sh"
 
 if [ ! -x "$METADATA_SCRIPT" ]; then

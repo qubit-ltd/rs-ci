@@ -10,7 +10,7 @@
 #
 # Optional Cargo compatibility matrix runner.
 #
-# Projects can add .rs-ci-cargo-matrix.json in the project root to request
+# Projects can add .infra/ci/cargo-matrix.json in the project root to request
 # additional feature or dependency compatibility checks beyond the default CI
 # selection.
 #
@@ -20,23 +20,19 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=toolchains.sh
 source "$SCRIPT_DIR/toolchains.sh"
+# shellcheck source=config-path.sh
+source "$SCRIPT_DIR/config-path.sh"
+# shellcheck source=project-root.sh
+source "$SCRIPT_DIR/project-root.sh"
 configure_rs_ci_toolchains
 
-CONFIG_FILE_NAME="${RS_CI_CARGO_MATRIX_CONFIG:-.rs-ci-cargo-matrix.json}"
+CONFIG_FILE_NAME="${RS_CI_CARGO_MATRIX_CONFIG:-.infra/ci/cargo-matrix.json}"
 
-if [ -n "${RS_CI_PROJECT_ROOT:-}" ]; then
-    PROJECT_ROOT="$RS_CI_PROJECT_ROOT"
-elif [ "$(basename "$SCRIPT_DIR")" = ".rs-ci" ]; then
-    PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
-else
-    PROJECT_ROOT="$SCRIPT_DIR"
-fi
+PROJECT_ROOT=$(rs_ci_project_root "$SCRIPT_DIR")
 
-if [[ "$CONFIG_FILE_NAME" = /* ]]; then
-    CONFIG_FILE="$CONFIG_FILE_NAME"
-else
-    CONFIG_FILE="$PROJECT_ROOT/$CONFIG_FILE_NAME"
-fi
+CONFIG_FILE=$(rs_ci_config_path "$PROJECT_ROOT" \
+    ".infra/ci/cargo-matrix.json" ".rs-ci-cargo-matrix.json" \
+    "${RS_CI_CARGO_MATRIX_CONFIG:-}")
 
 # Feature-matrix runs intentionally use a target directory separate from the
 # main CI build.  The matrix exercises mutually exclusive feature sets, and

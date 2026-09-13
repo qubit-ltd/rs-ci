@@ -177,6 +177,54 @@ def run_coverage(
 
 
 class CoverageScriptTests(unittest.TestCase):
+    def test_prefers_infra_coverage_config_over_legacy_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "project"
+            root.mkdir()
+            write_project(root)
+            fake_bin = Path(tmp) / "bin"
+            fake_bin.mkdir()
+            write_fake_tools(fake_bin, Path(tmp) / "cargo.log")
+            coverage_fixture = Path(tmp) / "coverage-fixture.json"
+            write_coverage_fixture(coverage_fixture, [coverage_file(root / "src" / "lib.rs")])
+            config_dir = root / ".infra" / "ci"
+            config_dir.mkdir(parents=True)
+            (config_dir / "coverage.json").write_text(
+                json.dumps({"scope": "package"}), encoding="utf-8"
+            )
+            (root / ".rs-ci-coverage.json").write_text(
+                json.dumps({"scope": "invalid"}), encoding="utf-8"
+            )
+
+            result = run_coverage(
+                root, fake_bin, {"FAKE_COVERAGE_JSON": str(coverage_fixture)}, report_format="text"
+            )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("Coverage scope: package", result.stdout)
+
+    def test_legacy_coverage_config_emits_migration_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "project"
+            root.mkdir()
+            write_project(root)
+            fake_bin = Path(tmp) / "bin"
+            fake_bin.mkdir()
+            write_fake_tools(fake_bin, Path(tmp) / "cargo.log")
+            coverage_fixture = Path(tmp) / "coverage-fixture.json"
+            write_coverage_fixture(coverage_fixture, [coverage_file(root / "src" / "lib.rs")])
+            (root / ".rs-ci-coverage.json").write_text(
+                json.dumps({"scope": "package"}), encoding="utf-8"
+            )
+
+            result = run_coverage(
+                root, fake_bin, {"FAKE_COVERAGE_JSON": str(coverage_fixture)}, report_format="text"
+            )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn(".infra/ci/coverage.json", result.stderr)
+        self.assertIn(".rs-ci-coverage.json", result.stderr)
+
     def test_uses_cargo_target_dir_without_unsupported_target_dir_option(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "project"

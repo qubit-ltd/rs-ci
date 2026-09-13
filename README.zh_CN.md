@@ -9,6 +9,7 @@
 - `align-ci.sh`：本地自动修复脚本，用于格式化代码并运行 clippy。
 - `ci-check.sh`：本地完整 CI 等价检查脚本。
 - `cargo-env.sh`：本地入口脚本共用的 Cargo 环境设置。
+- `config-path.sh` 和 `project-root.sh`：配置文件与项目根目录解析。
 - `cargo-lock-update.sh`：同步根项目及支持的辅助 Cargo.lock 文件。
 - `update-submodule.sh`：本地 submodule 同步脚本，默认从远程跟踪分支更新 submodule。
 - `cargo-feature-check.sh`：可选的项目声明式 Cargo feature 与依赖兼容矩阵运行器。
@@ -34,7 +35,7 @@
 把这些文件复制到 Rust 项目根目录：
 
 ```bash
-command cp align-ci.sh ci-check.sh cargo-env.sh cargo-lock-update.sh toolchains.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh rs-ci-metadata.sh cargo-miri-check.sh cargo-sanitizer-check.sh cargo-package-check.sh run-project-ci-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
+command cp align-ci.sh ci-check.sh cargo-env.sh config-path.sh project-root.sh cargo-lock-update.sh toolchains.sh update-submodule.sh cargo-feature-check.sh cargo-fuzz-check.sh cargo-loom-check.sh rs-ci-metadata.sh cargo-miri-check.sh cargo-sanitizer-check.sh cargo-package-check.sh run-project-ci-check.sh readme-version-check.py style-check.sh coverage.sh rustfmt.toml <project-root>/
 command cp .circleci/config.yml <project-root>/.circleci/config.yml
 ```
 
@@ -47,7 +48,7 @@ chmod +x align-ci.sh ci-check.sh cargo-lock-update.sh update-submodule.sh cargo-
 ./ci-check.sh
 ```
 
-如果使用 GitHub Actions，保留本仓库作为 `.rs-ci` submodule，并在 Rust
+如果使用 GitHub Actions，保留本仓库作为 `.infra/tools/rs-ci` submodule，并在 Rust
 项目中添加这个 workflow：
 
 ```bash
@@ -73,6 +74,12 @@ jobs:
     uses: qubit-ltd/rs-ci/.github/workflows/rust-ci.yml@main
 YAML
 ```
+
+项目级 JSON 配置放在 `.infra/ci/`：`cargo-matrix.json`、`coverage.json` 和
+`pages.json`。旧版根目录 `.rs-ci-*.json` 在迁移期仍可读取，但会发出警告。
+显式设置的 `RS_CI_CARGO_MATRIX_CONFIG` 或 `RS_CI_COVERAGE_CONFIG` 优先。
+可复用 workflow 会探测 `.infra/tools/rs-ci`、旧 `.rs-ci` 或复制到项目根目录
+的脚本；也可通过 `rs_ci_root` workflow 输入指定其他工具位置。
 
 可复用 workflow 提供布尔输入 `run_windows_tests` 和 `run_macos_tests`，两者的
 默认值均为 `false`。只有包含平台专用代码路径的 crate 才需要显式启用：
@@ -114,7 +121,7 @@ chmod +x project-ci-check.sh
 test、release build、文档、打包验证、审计，以及可选的 Windows 和 macOS 检查。覆盖率通过 `coverage.sh all` 生成，工具是
 `cargo-llvm-cov`，由 `taiki-e/install-action` 安装。可复用 workflow、本地
 `ci-check.sh` 和 `coverage.sh` 默认都会强制执行单源码阈值。对于已审查的
-proc-macro 或插桩限制，应使用 `.rs-ci-coverage.json` 的
+proc-macro 或插桩限制，应使用 `.infra/ci/coverage.json` 的
 `threshold_exempt_files`，而不是关闭阈值检查。覆盖率发布只使用 GitHub Actions
 summary、comment 和 artifact，不需要 Codecov 或 Coveralls token。
 
@@ -136,7 +143,7 @@ artifact。
 `coverage.sh` 通过 `cargo metadata` 解析项目，因此一个 workspace 可以在一次
 运行中收集并检查多个成员 package。默认范围是 Cargo 的
 `workspace_default_members`；需要其他选择时，在项目根目录添加
-`.rs-ci-coverage.json`：
+`.infra/ci/coverage.json`：
 
 ```json
 {
@@ -287,7 +294,7 @@ opt-in 的 Miri 与 AddressSanitizer 检查；Windows 继续只运行常规测�
 Cargo 默认 feature 选择，不额外检查其他 feature 组合。
 
 如果项目需要额外 feature 组合或依赖版本兼容检查，可以在项目根目录添加
-`.rs-ci-cargo-matrix.json`。可复用 workflow、CircleCI 模板和本地 `ci-check.sh`
+`.infra/ci/cargo-matrix.json`。可复用 workflow、CircleCI 模板和本地 `ci-check.sh`
 会自动检测这个文件，并在默认 CI 路径之外追加这些检查。
 
 ```json
@@ -359,7 +366,7 @@ package 选择行为。
 - `ci-summary.json`：生成站点使用的 CI 元数据。
 
 站点构建器位于 `page/build-pages.mjs`，并读取 `page/default-config.json`。
-项目可以在根目录放置 `.rs-ci-page.json` 覆盖默认配置。构建器只使用 Node.js
+项目可以在根目录放置 `.infra/ci/pages.json` 覆盖默认配置。构建器只使用 Node.js
 内置模块，项目不需要 npm 包管理器或前端依赖安装。
 
 ## 可调环境变量
@@ -379,10 +386,11 @@ package 选择行为。
 Cargo 命令之前拒绝浮动的 `nightly`，共享默认值统一定义在 `toolchains.sh`。
 
 - `RS_CI_PROJECT_ROOT`：当这些脚本从其他目录运行时，用它指定 Rust 项目根目录。
+- `RS_CI_ROOT`：可复用 workflow 使用的 rs-ci 工具目录；未设置时自动探测。
 - `RS_CI_AUXILIARY_MANIFESTS`：需要同步 lock 文件的其他 Cargo manifest 路径，每行一个。
 - `RS_CI_LOCKFILE_TOOLCHAIN`：lock 文件 metadata 检查和重新生成使用的可选工具链；默认使用 `RS_CI_BUILD_TOOLCHAIN`。
 - `RS_CI_RUSTFMT_CONFIG`：rustfmt 配置路径；默认是运行中的 CI 脚本所在目录旁的 `rustfmt.toml`。
-- `RS_CI_CARGO_MATRIX_CONFIG`：可选 Cargo 兼容矩阵配置文件的项目相对路径；默认是 `.rs-ci-cargo-matrix.json`。
+- `RS_CI_CARGO_MATRIX_CONFIG`：可选 Cargo 兼容矩阵配置文件的项目相对路径；默认是 `.infra/ci/cargo-matrix.json`。
 - `RS_CI_CARGO_HOME_MODE`：本地脚本使用的 Cargo 缓存模式，可选 `project` 或 `shared`；默认是 `project`，避免多个 `rs-*` 仓库并行检查时共享 Cargo package cache 和 index 锁。设为 `shared` 可以保留 Cargo 默认的全局缓存行为。
 - `RS_CI_CARGO_HOME_ROOT`：当 `RS_CI_CARGO_HOME_MODE=project` 时，per-project Cargo home 的根目录；默认是 `$XDG_CACHE_HOME/rs-ci/cargo-home` 或 `$HOME/.cache/rs-ci/cargo-home`。
 - `RUN_COVERAGE_CFG_CLIPPY`：设为 `1` 时，使用 `RUSTFLAGS="--cfg coverage"` 运行 clippy。
@@ -401,7 +409,7 @@ Cargo 命令之前拒绝浮动的 `nightly`，共享默认值统一定义在 `to
 - `STYLE_ALLOWLIST_FILE`：项目级已审核风格例外白名单；默认是 `<project-root>/.qubit-style-allowlist`。
 - `COVERAGE_ENFORCE_THRESHOLDS`：rs-ci 脚本和 CI 模板中必须保持为 `1`；默认是 `1`。除非在 rs-ci 策略测试里同时设置 `RS_CI_ALLOW_DISABLED_COVERAGE_THRESHOLDS=1`，否则不允许关闭阈值检查。
 - `COVERAGE_SCOPE`：覆盖配置文件中的范围，可选 `default-members`、`workspace` 或 `package`。
-- `RS_CI_COVERAGE_CONFIG`：可选 coverage 配置的项目相对或绝对路径；默认是 `.rs-ci-coverage.json`。
+- `RS_CI_COVERAGE_CONFIG`：可选 coverage 配置的项目相对或绝对路径；默认是 `.infra/ci/coverage.json`。
 - `COVERAGE_ALL_FEATURES`：设为 `0` 时，coverage 使用 Cargo 默认 feature 选择；默认是 `1`。
 - `COVERAGE_NO_DEFAULT_FEATURES`：与 `COVERAGE_ALL_FEATURES=0` 配合使用，设为 `1` 时 coverage 禁用默认 feature。
 - `COVERAGE_FEATURES`：当 `COVERAGE_ALL_FEATURES=0` 时传给 coverage 的逗号分隔 feature 列表。

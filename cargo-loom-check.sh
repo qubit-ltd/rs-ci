@@ -16,9 +16,11 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=toolchains.sh
 source "$SCRIPT_DIR/toolchains.sh"
+# shellcheck source=project-root.sh
+source "$SCRIPT_DIR/project-root.sh"
 configure_rs_ci_toolchains
 
-PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
+PROJECT_ROOT=$(rs_ci_project_root "$SCRIPT_DIR")
 
 die() {
     echo "error: $*" >&2

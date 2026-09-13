@@ -70,7 +70,9 @@ ensure_executable_file() {
 }
 
 RUSTFMT_CONFIG="${RS_CI_RUSTFMT_CONFIG:-$SCRIPT_DIR/rustfmt.toml}"
-PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
+# shellcheck source=project-root.sh
+source "$SCRIPT_DIR/project-root.sh"
+PROJECT_ROOT=$(rs_ci_project_root "$SCRIPT_DIR")
 
 # shellcheck source=cargo-env.sh
 source "$SCRIPT_DIR/cargo-env.sh"

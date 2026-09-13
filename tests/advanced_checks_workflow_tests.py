@@ -24,7 +24,7 @@ class AdvancedChecksWorkflowTests(unittest.TestCase):
             block.index("Verify Cargo package"),
         )
         self.assertIn(
-            'RS_CI_PROJECT_ROOT="$PWD" .rs-ci/run-project-ci-check.sh',
+            'RS_CI_PROJECT_ROOT="$PWD" $RS_CI_ROOT/run-project-ci-check.sh',
             block,
         )
         self.assertIn('elif [ -x ./run-project-ci-check.sh ]; then', block)

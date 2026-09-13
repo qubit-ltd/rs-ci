@@ -11,6 +11,19 @@ README_ZH_CN = REPO_ROOT / "README.zh_CN.md"
 
 
 class PlatformWorkflowTests(unittest.TestCase):
+    def test_reusable_workflow_resolves_migrated_rs_ci_tool_root(self) -> None:
+        workflow = GITHUB_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn(".infra/tools/rs-ci/toolchains.sh", workflow)
+        self.assertIn("RS_CI_ROOT", workflow)
+        self.assertIn(".rs-ci/toolchains.sh", workflow)
+        self.assertIn(".infra/ci/cargo-matrix.json", workflow)
+
+    def test_circleci_template_resolves_migrated_rs_ci_tool_root(self) -> None:
+        config = CIRCLECI_CONFIG.read_text(encoding="utf-8")
+        self.assertIn(".infra/tools/rs-ci/toolchains.sh", config)
+        self.assertIn(".rs-ci/toolchains.sh", config)
+        self.assertIn(".infra/ci/cargo-matrix.json", config)
+
     def test_format_checks_include_all_workspace_members(self) -> None:
         for config_path in (GITHUB_WORKFLOW, CIRCLECI_CONFIG):
             config = config_path.read_text(encoding="utf-8")

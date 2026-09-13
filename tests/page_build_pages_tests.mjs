@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -10,7 +10,7 @@ const testDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(testDir, "..");
 const builder = path.join(repoRoot, "page", "build-pages.mjs");
 
-function buildPages(readme) {
+function buildPagesResult(readme, infraConfig, legacyConfig) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "rs-ci-pages-"));
   const projectRoot = path.join(tmp, "project");
   const outputDir = path.join(tmp, "public");
@@ -26,6 +26,13 @@ function buildPages(readme) {
     ].join("\n"),
   );
   fs.writeFileSync(path.join(projectRoot, "README.md"), readme);
+  if (infraConfig) {
+    fs.mkdirSync(path.join(projectRoot, ".infra", "ci"), { recursive: true });
+    fs.writeFileSync(path.join(projectRoot, ".infra", "ci", "pages.json"), JSON.stringify(infraConfig));
+  }
+  if (legacyConfig) {
+    fs.writeFileSync(path.join(projectRoot, ".rs-ci-page.json"), JSON.stringify(legacyConfig));
+  }
   fs.writeFileSync(
     path.join(tmp, "coverage.json"),
     JSON.stringify({
@@ -41,7 +48,7 @@ function buildPages(readme) {
     }),
   );
 
-  execFileSync("node", [builder], {
+  const result = spawnSync("node", [builder], {
     cwd: tmp,
     env: {
       ...process.env,
@@ -52,8 +59,28 @@ function buildPages(readme) {
     stdio: "pipe",
   });
 
-  return fs.readFileSync(path.join(outputDir, "index.html"), "utf8");
+  assert.equal(result.status, 0, result.stderr?.toString());
+  return {
+    html: fs.readFileSync(path.join(outputDir, "index.html"), "utf8"),
+    stderr: result.stderr.toString(),
+  };
 }
+
+function buildPages(readme) {
+  return buildPagesResult(readme).html;
+}
+
+test("prefers .infra/ci/pages.json over legacy page settings", () => {
+  const result = buildPagesResult("# Demo", { siteTitle: "Infra title" }, { siteTitle: "Legacy title" });
+  assert.match(result.html, /Infra title/);
+  assert.doesNotMatch(result.html, /Legacy title/);
+});
+
+test("warns when legacy page settings are used", () => {
+  const result = buildPagesResult("# Demo", undefined, { siteTitle: "Legacy title" });
+  assert.match(result.html, /Legacy title/);
+  assert.match(result.stderr, /\.infra\/ci\/pages\.json/);
+});
 
 test("renders Markdown soft line breaks without preserving source wrapping", () => {
   const html = buildPages(`# Qubit Test

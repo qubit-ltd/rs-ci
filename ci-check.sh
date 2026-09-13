@@ -17,6 +17,10 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=toolchains.sh
 source "$SCRIPT_DIR/toolchains.sh"
+# shellcheck source=config-path.sh
+source "$SCRIPT_DIR/config-path.sh"
+# shellcheck source=project-root.sh
+source "$SCRIPT_DIR/project-root.sh"
 configure_rs_ci_toolchains
 
 RUN_COVERAGE_CFG_CLIPPY="${RUN_COVERAGE_CFG_CLIPPY:-0}"
@@ -216,7 +220,7 @@ run_security_audit() {
 }
 
 RUSTFMT_CONFIG="${RS_CI_RUSTFMT_CONFIG:-$SCRIPT_DIR/rustfmt.toml}"
-PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
+PROJECT_ROOT=$(rs_ci_project_root "$SCRIPT_DIR")
 PROJECT_ROOT=$(cd "$PROJECT_ROOT" && pwd -P)
 
 # shellcheck source=cargo-env.sh
@@ -427,12 +431,9 @@ print_success "README dependency versions passed"
 echo ""
 
 print_step "12/15 Running configured Cargo compatibility matrix"
-MATRIX_CONFIG_NAME="${RS_CI_CARGO_MATRIX_CONFIG:-.rs-ci-cargo-matrix.json}"
-if [[ "$MATRIX_CONFIG_NAME" = /* ]]; then
-    MATRIX_CONFIG_FILE="$MATRIX_CONFIG_NAME"
-else
-    MATRIX_CONFIG_FILE="$PROJECT_ROOT/$MATRIX_CONFIG_NAME"
-fi
+MATRIX_CONFIG_FILE=$(rs_ci_config_path "$PROJECT_ROOT" \
+    ".infra/ci/cargo-matrix.json" ".rs-ci-cargo-matrix.json" \
+    "${RS_CI_CARGO_MATRIX_CONFIG:-}")
 if [ -x "$SCRIPT_DIR/cargo-feature-check.sh" ]; then
     RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/cargo-feature-check.sh" run-all
 elif [ -f "$MATRIX_CONFIG_FILE" ]; then
@@ -463,7 +464,7 @@ ensure_llvm_tools
 require_executable_file "$SCRIPT_DIR/coverage-threshold-policy-check.sh"
 RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/coverage-threshold-policy-check.sh"
 # Proc-macro code is hard to instrument from this crate's test process.
-# List reviewed exemptions in .rs-ci-coverage.json threshold_exempt_files.
+# List reviewed exemptions in .infra/ci/coverage.json threshold_exempt_files.
 RS_CI_PROJECT_ROOT="$PROJECT_ROOT" "$SCRIPT_DIR/coverage.sh" json
 print_success "Coverage report passed thresholds"
 echo ""

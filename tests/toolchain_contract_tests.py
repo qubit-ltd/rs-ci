@@ -114,7 +114,7 @@ class ToolchainContractTests(unittest.TestCase):
 
         self.assertIn(
             'RUSTUP_TOOLCHAIN="$RS_CI_BUILD_TOOLCHAIN" '
-            "python3 .rs-ci/readme-version-check.py",
+            "python3 $RS_CI_ROOT/readme-version-check.py",
             coverage_job,
         )
         self.assertIn(

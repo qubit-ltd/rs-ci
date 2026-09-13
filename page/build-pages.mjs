@@ -8,7 +8,12 @@ const projectRoot = process.env.RS_CI_PROJECT_ROOT
   : process.cwd();
 const outputDir = path.resolve(process.env.RS_CI_PAGES_OUTPUT || "public");
 const defaultConfigPath = path.join(scriptDir, "default-config.json");
-const projectConfigPath = path.join(projectRoot, ".rs-ci-page.json");
+const preferredConfigPath = path.join(projectRoot, ".infra", "ci", "pages.json");
+const legacyConfigPath = path.join(projectRoot, ".rs-ci-page.json");
+const projectConfigPath = fs.existsSync(preferredConfigPath) ? preferredConfigPath : legacyConfigPath;
+if (projectConfigPath === legacyConfigPath && fs.existsSync(legacyConfigPath)) {
+  console.error("warning: .rs-ci-page.json is deprecated; move it to .infra/ci/pages.json");
+}
 const layoutPath = path.join(scriptDir, "template", "layout.html");
 const assetsDir = path.join(scriptDir, "template", "assets");
 

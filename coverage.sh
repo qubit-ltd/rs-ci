@@ -17,6 +17,10 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=toolchains.sh
 source "$SCRIPT_DIR/toolchains.sh"
+# shellcheck source=config-path.sh
+source "$SCRIPT_DIR/config-path.sh"
+# shellcheck source=project-root.sh
+source "$SCRIPT_DIR/project-root.sh"
 configure_rs_ci_toolchains
 
 # Coverage is enforced across the crate. Per-file 100% gates are too brittle
@@ -40,7 +44,7 @@ require_coverage_threshold_enforcement() {
 
     echo "error: COVERAGE_ENFORCE_THRESHOLDS must be 1" >&2
     echo "Disabling coverage thresholds is not allowed in rs-ci scripts or CI configs." >&2
-    echo "For proc-macro or instrumentation gaps, add threshold_exempt_files in .rs-ci-coverage.json." >&2
+    echo "For proc-macro or instrumentation gaps, add threshold_exempt_files in .infra/ci/coverage.json." >&2
     exit 1
 }
 
@@ -85,7 +89,7 @@ print_usage() {
     echo "  MIN_REGION_COVERAGE=${MIN_REGION_COVERAGE} # required: > value"
     echo "  COVERAGE_SCOPE=${COVERAGE_SCOPE:-default-members}"
     echo "  COVERAGE_SOURCE_DIR=${COVERAGE_SOURCE_DIR}"
-    echo "  RS_CI_COVERAGE_CONFIG=${RS_CI_COVERAGE_CONFIG:-.rs-ci-coverage.json}"
+    echo "  RS_CI_COVERAGE_CONFIG=${RS_CI_COVERAGE_CONFIG:-.infra/ci/coverage.json}"
     echo "  COVERAGE_OPEN_HTML=${COVERAGE_OPEN_HTML}"
     echo "  COVERAGE_ENFORCE_THRESHOLDS=${COVERAGE_ENFORCE_THRESHOLDS}"
     echo "  COVERAGE_ALL_FEATURES=${COVERAGE_ALL_FEATURES}"
@@ -915,7 +919,7 @@ require_command jq
 ignore_invalid_llvm_tool_overrides
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
-PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
+PROJECT_ROOT=$(rs_ci_project_root "$SCRIPT_DIR")
 PROJECT_ROOT=$(cd "$PROJECT_ROOT" && pwd -P)
 cd "$PROJECT_ROOT"
 configure_coverage_target_directories "$PROJECT_ROOT"
@@ -938,20 +942,16 @@ if ! cargo +"$RS_CI_BUILD_TOOLCHAIN" metadata --no-deps --format-version 1 \
 fi
 
 if [ -n "$RS_CI_COVERAGE_CONFIG" ]; then
-    case "$RS_CI_COVERAGE_CONFIG" in
-        /*)
-            COVERAGE_CONFIG_PATH="$RS_CI_COVERAGE_CONFIG"
-            ;;
-        *)
-            COVERAGE_CONFIG_PATH="$PROJECT_ROOT/$RS_CI_COVERAGE_CONFIG"
-            ;;
-    esac
+    COVERAGE_CONFIG_PATH=$(rs_ci_config_path "$PROJECT_ROOT" \
+        ".infra/ci/coverage.json" ".rs-ci-coverage.json" \
+        "$RS_CI_COVERAGE_CONFIG")
     if [ ! -f "$COVERAGE_CONFIG_PATH" ]; then
         echo "error: coverage configuration not found: $COVERAGE_CONFIG_PATH" >&2
         exit 1
     fi
 else
-    COVERAGE_CONFIG_PATH="$PROJECT_ROOT/.rs-ci-coverage.json"
+    COVERAGE_CONFIG_PATH=$(rs_ci_config_path "$PROJECT_ROOT" \
+        ".infra/ci/coverage.json" ".rs-ci-coverage.json")
 fi
 
 if [ -f "$COVERAGE_CONFIG_PATH" ]; then

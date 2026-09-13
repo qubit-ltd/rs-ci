@@ -13,6 +13,13 @@ commands:
             git checkout "$CIRCLE_SHA1"
             git submodule sync --recursive
             git submodule update --init --recursive --depth 1
+            if [ -f .infra/tools/rs-ci/toolchains.sh ]; then
+              echo 'export RS_CI_ROOT=.infra/tools/rs-ci' >> "$BASH_ENV"
+            elif [ -f .rs-ci/toolchains.sh ]; then
+              echo 'export RS_CI_ROOT=.rs-ci' >> "$BASH_ENV"
+            else
+              echo 'export RS_CI_ROOT=.' >> "$BASH_ENV"
+            fi
 
   checkout_https_windows:
     steps:
@@ -81,8 +88,8 @@ jobs:
       - run:
           name: Install rustfmt and clippy
           command: |
-            if [ -f .rs-ci/toolchains.sh ]; then
-              TOOLCHAIN_CONTRACT=.rs-ci/toolchains.sh
+            if [ -f $RS_CI_ROOT/toolchains.sh ]; then
+              TOOLCHAIN_CONTRACT=$RS_CI_ROOT/toolchains.sh
             else
               TOOLCHAIN_CONTRACT=toolchains.sh
             fi
@@ -94,8 +101,8 @@ jobs:
       - run:
           name: Check code format
           command: |
-            if [ -f .rs-ci/rustfmt.toml ]; then
-              RUSTFMT_CONFIG=.rs-ci/rustfmt.toml
+            if [ -f $RS_CI_ROOT/rustfmt.toml ]; then
+              RUSTFMT_CONFIG=$RS_CI_ROOT/rustfmt.toml
             else
               RUSTFMT_CONFIG=rustfmt.toml
             fi
@@ -136,8 +143,8 @@ jobs:
           name: Run conditional cargo-fuzz smoke checks
           command: |
             set -euo pipefail
-            if [ -x .rs-ci/cargo-fuzz-check.sh ]; then
-              CHECKER=.rs-ci/cargo-fuzz-check.sh
+            if [ -x $RS_CI_ROOT/cargo-fuzz-check.sh ]; then
+              CHECKER=$RS_CI_ROOT/cargo-fuzz-check.sh
             elif [ -x ./cargo-fuzz-check.sh ]; then
               CHECKER=./cargo-fuzz-check.sh
             else
@@ -183,8 +190,8 @@ jobs:
           name: Conditional Loom model checks
           command: |
             set -euo pipefail
-            if [ -x .rs-ci/cargo-loom-check.sh ]; then
-              CHECKER=.rs-ci/cargo-loom-check.sh
+            if [ -x $RS_CI_ROOT/cargo-loom-check.sh ]; then
+              CHECKER=$RS_CI_ROOT/cargo-loom-check.sh
             elif [ -x ./cargo-loom-check.sh ]; then
               CHECKER=./cargo-loom-check.sh
             else
@@ -237,13 +244,12 @@ jobs:
       - run:
           name: Run configured Cargo feature matrix
           command: |
-            if [ -x .rs-ci/cargo-feature-check.sh ]; then
-              MATRIX_SCRIPT=.rs-ci/cargo-feature-check.sh
+            if [ -x $RS_CI_ROOT/cargo-feature-check.sh ]; then
+              MATRIX_SCRIPT=$RS_CI_ROOT/cargo-feature-check.sh
             elif [ -x ./cargo-feature-check.sh ]; then
               MATRIX_SCRIPT=./cargo-feature-check.sh
             else
-              config_file="${RS_CI_CARGO_MATRIX_CONFIG:-.rs-ci-cargo-matrix.json}"
-              if [ -f "$config_file" ]; then
+              if [ -n "${RS_CI_CARGO_MATRIX_CONFIG:-}" ] || [ -f .infra/ci/cargo-matrix.json ] || [ -f .rs-ci-cargo-matrix.json ]; then
                 echo "Cargo feature matrix config exists, but cargo-feature-check.sh was not found" >&2
                 exit 1
               fi

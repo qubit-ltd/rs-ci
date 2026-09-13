@@ -46,7 +46,9 @@ require_command cargo
 require_command jq
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-PROJECT_ROOT="${RS_CI_PROJECT_ROOT:-$SCRIPT_DIR}"
+# shellcheck source=project-root.sh
+source "$SCRIPT_DIR/project-root.sh"
+PROJECT_ROOT=$(rs_ci_project_root "$SCRIPT_DIR")
 MANIFEST_PATH="$PROJECT_ROOT/Cargo.toml"
 
 # shellcheck source=toolchains.sh

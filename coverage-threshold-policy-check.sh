@@ -19,7 +19,7 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 fail() {
     echo "error: coverage threshold policy violation: $1" >&2
     echo "Do not disable COVERAGE_ENFORCE_THRESHOLDS in rs-ci scripts or CI templates." >&2
-    echo "For proc-macro or instrumentation gaps, use .rs-ci-coverage.json threshold_exempt_files." >&2
+    echo "For proc-macro or instrumentation gaps, use .infra/ci/coverage.json threshold_exempt_files." >&2
     exit 1
 }
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -12,6 +13,66 @@ CHECKER = REPO_ROOT / "cargo-feature-check.sh"
 
 
 class CargoFeatureCheckTests(unittest.TestCase):
+    def test_nested_tool_location_finds_project_root_without_override(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir)
+            tool_dir = project_root / ".infra" / "tools" / "rs-ci"
+            tool_dir.mkdir(parents=True)
+            for filename in ("cargo-feature-check.sh", "toolchains.sh", "config-path.sh", "project-root.sh"):
+                shutil.copy2(REPO_ROOT / filename, tool_dir / filename)
+            config_dir = project_root / ".infra" / "ci"
+            config_dir.mkdir()
+            (config_dir / "cargo-matrix.json").write_text(
+                json.dumps({"version": 1, "checks": [{"name": "nested", "commands": ["check"]}]}),
+                encoding="utf-8",
+            )
+            environment = os.environ.copy()
+            environment.pop("RS_CI_PROJECT_ROOT", None)
+            result = subprocess.run(
+                ["bash", str(tool_dir / "cargo-feature-check.sh"), "github-matrix"],
+                cwd=project_root,
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("nested", json.loads(result.stdout)["include"][0]["name"])
+
+    def test_prefers_infra_matrix_over_legacy_config(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir)
+            config_dir = project_root / ".infra" / "ci"
+            config_dir.mkdir(parents=True)
+            (config_dir / "cargo-matrix.json").write_text(
+                json.dumps({"version": 1, "checks": [{"name": "infra", "commands": ["check"]}]}),
+                encoding="utf-8",
+            )
+            (project_root / ".rs-ci-cargo-matrix.json").write_text(
+                json.dumps({"version": 1, "checks": [{"name": "legacy", "commands": ["check"]}]}),
+                encoding="utf-8",
+            )
+
+            result = self.run_checker(project_root, "github-matrix")
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("infra", json.loads(result.stdout)["include"][0]["name"])
+
+    def test_legacy_matrix_emits_migration_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_root = Path(temp_dir)
+            (project_root / ".rs-ci-cargo-matrix.json").write_text(
+                json.dumps({"version": 1, "checks": [{"name": "legacy", "commands": ["check"]}]}),
+                encoding="utf-8",
+            )
+
+            result = self.run_checker(project_root, "github-matrix")
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn(".infra/ci/cargo-matrix.json", result.stderr)
+        self.assertIn(".rs-ci-cargo-matrix.json", result.stderr)
+
     def run_checker(
         self,
         project_root: Path,

@@ -32,7 +32,12 @@ on:
         description: Project-relative path to optional Cargo compatibility matrix config.
         required: false
         type: string
-        default: ".rs-ci-cargo-matrix.json"
+        default: ""
+      rs_ci_root:
+        description: Optional project-relative path to the rs-ci tool directory.
+        required: false
+        type: string
+        default: ""
       run_windows_tests:
         description: Run clippy and tests on the pinned Windows runner.
         required: false
@@ -63,6 +68,7 @@ env:
   RS_CI_FUZZ_SECONDS_PER_TARGET: ${{ inputs.cargo_fuzz_seconds_per_target }}
   RS_CI_FUZZ_MAX_LEN: ${{ inputs.cargo_fuzz_max_len }}
   RS_CI_CARGO_MATRIX_CONFIG: ${{ inputs.cargo_feature_matrix_config }}
+  RS_CI_ROOT: ${{ inputs.rs_ci_root }}
 
 jobs:
   resolve_toolchains:
@@ -85,13 +91,28 @@ jobs:
           fetch-depth: 1
           submodules: recursive
 
+      - name: Resolve rs-ci root
+        shell: bash
+        run: |
+          if [ -n "${RS_CI_ROOT:-}" ]; then
+            [ -f "$RS_CI_ROOT/toolchains.sh" ] || { echo "Invalid RS_CI_ROOT: $RS_CI_ROOT" >&2; exit 1; }
+            rs_ci_root="$RS_CI_ROOT"
+          elif [ -f .infra/tools/rs-ci/toolchains.sh ]; then
+            rs_ci_root=.infra/tools/rs-ci
+          elif [ -f .rs-ci/toolchains.sh ]; then
+            rs_ci_root=.rs-ci
+          else
+            rs_ci_root=.
+          fi
+          echo "RS_CI_ROOT=$rs_ci_root" >> "$GITHUB_ENV"
+
       - name: Load toolchain contract
         id: contract
         shell: bash
         run: |
           set -euo pipefail
-          if [ -f .rs-ci/toolchains.sh ]; then
-            TOOLCHAIN_CONTRACT=.rs-ci/toolchains.sh
+          if [ -f $RS_CI_ROOT/toolchains.sh ]; then
+            TOOLCHAIN_CONTRACT=$RS_CI_ROOT/toolchains.sh
           else
             TOOLCHAIN_CONTRACT=toolchains.sh
           fi
@@ -126,6 +147,21 @@ jobs:
           fetch-depth: 1
           submodules: recursive
 
+      - name: Resolve rs-ci root
+        shell: bash
+        run: |
+          if [ -n "${RS_CI_ROOT:-}" ]; then
+            [ -f "$RS_CI_ROOT/toolchains.sh" ] || { echo "Invalid RS_CI_ROOT: $RS_CI_ROOT" >&2; exit 1; }
+            rs_ci_root="$RS_CI_ROOT"
+          elif [ -f .infra/tools/rs-ci/toolchains.sh ]; then
+            rs_ci_root=.infra/tools/rs-ci
+          elif [ -f .rs-ci/toolchains.sh ]; then
+            rs_ci_root=.rs-ci
+          else
+            rs_ci_root=.
+          fi
+          echo "RS_CI_ROOT=$rs_ci_root" >> "$GITHUB_ENV"
+
       - name: Restore cargo cache
         uses: actions/cache@v5
         with:
@@ -141,8 +177,8 @@ jobs:
 
       - name: Install rustfmt and clippy
         run: |
-          if [ -f .rs-ci/toolchains.sh ]; then
-            TOOLCHAIN_CONTRACT=.rs-ci/toolchains.sh
+          if [ -f $RS_CI_ROOT/toolchains.sh ]; then
+            TOOLCHAIN_CONTRACT=$RS_CI_ROOT/toolchains.sh
           else
             TOOLCHAIN_CONTRACT=toolchains.sh
           fi
@@ -154,8 +190,8 @@ jobs:
 
       - name: Check code format
         run: |
-          if [ -f .rs-ci/rustfmt.toml ]; then
-            RUSTFMT_CONFIG=.rs-ci/rustfmt.toml
+          if [ -f $RS_CI_ROOT/rustfmt.toml ]; then
+            RUSTFMT_CONFIG=$RS_CI_ROOT/rustfmt.toml
           else
             RUSTFMT_CONFIG=rustfmt.toml
           fi
@@ -203,6 +239,21 @@ jobs:
           fetch-depth: 1
           submodules: recursive
 
+      - name: Resolve rs-ci root
+        shell: bash
+        run: |
+          if [ -n "${RS_CI_ROOT:-}" ]; then
+            [ -f "$RS_CI_ROOT/toolchains.sh" ] || { echo "Invalid RS_CI_ROOT: $RS_CI_ROOT" >&2; exit 1; }
+            rs_ci_root="$RS_CI_ROOT"
+          elif [ -f .infra/tools/rs-ci/toolchains.sh ]; then
+            rs_ci_root=.infra/tools/rs-ci
+          elif [ -f .rs-ci/toolchains.sh ]; then
+            rs_ci_root=.rs-ci
+          else
+            rs_ci_root=.
+          fi
+          echo "RS_CI_ROOT=$rs_ci_root" >> "$GITHUB_ENV"
+
       - name: Install Rust build toolchain
         run: rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
 
@@ -210,8 +261,8 @@ jobs:
         id: miri
         run: |
           set -euo pipefail
-          if [ -x .rs-ci/cargo-miri-check.sh ]; then
-            CHECKER=.rs-ci/cargo-miri-check.sh
+          if [ -x $RS_CI_ROOT/cargo-miri-check.sh ]; then
+            CHECKER=$RS_CI_ROOT/cargo-miri-check.sh
           elif [ -x ./cargo-miri-check.sh ]; then
             CHECKER=./cargo-miri-check.sh
           else
@@ -267,8 +318,8 @@ jobs:
         if: ${{ steps.miri.outputs.enabled == 'true' }}
         run: |
           set -euo pipefail
-          if [ -x .rs-ci/cargo-miri-check.sh ]; then
-            CHECKER=.rs-ci/cargo-miri-check.sh
+          if [ -x $RS_CI_ROOT/cargo-miri-check.sh ]; then
+            CHECKER=$RS_CI_ROOT/cargo-miri-check.sh
           else
             CHECKER=./cargo-miri-check.sh
           fi
@@ -304,6 +355,21 @@ jobs:
           fetch-depth: 1
           submodules: recursive
 
+      - name: Resolve rs-ci root
+        shell: bash
+        run: |
+          if [ -n "${RS_CI_ROOT:-}" ]; then
+            [ -f "$RS_CI_ROOT/toolchains.sh" ] || { echo "Invalid RS_CI_ROOT: $RS_CI_ROOT" >&2; exit 1; }
+            rs_ci_root="$RS_CI_ROOT"
+          elif [ -f .infra/tools/rs-ci/toolchains.sh ]; then
+            rs_ci_root=.infra/tools/rs-ci
+          elif [ -f .rs-ci/toolchains.sh ]; then
+            rs_ci_root=.rs-ci
+          else
+            rs_ci_root=.
+          fi
+          echo "RS_CI_ROOT=$rs_ci_root" >> "$GITHUB_ENV"
+
       - name: Install Rust build toolchain
         run: rustup toolchain install "$RS_CI_BUILD_TOOLCHAIN" --profile minimal
 
@@ -311,8 +377,8 @@ jobs:
         id: sanitizer
         run: |
           set -euo pipefail
-          if [ -x .rs-ci/cargo-sanitizer-check.sh ]; then
-            CHECKER=.rs-ci/cargo-sanitizer-check.sh
+          if [ -x $RS_CI_ROOT/cargo-sanitizer-check.sh ]; then
+            CHECKER=$RS_CI_ROOT/cargo-sanitizer-check.sh
           elif [ -x ./cargo-sanitizer-check.sh ]; then
             CHECKER=./cargo-sanitizer-check.sh
           else
@@ -370,8 +436,8 @@ jobs:
         if: ${{ steps.sanitizer.outputs.enabled == 'true' }}
         run: |
           set -euo pipefail
-          if [ -x .rs-ci/cargo-sanitizer-check.sh ]; then
-            CHECKER=.rs-ci/cargo-sanitizer-check.sh
+          if [ -x $RS_CI_ROOT/cargo-sanitizer-check.sh ]; then
+            CHECKER=$RS_CI_ROOT/cargo-sanitizer-check.sh
           else
             CHECKER=./cargo-sanitizer-check.sh
           fi
@@ -399,12 +465,27 @@ jobs:
           fetch-depth: 1
           submodules: recursive
 
+      - name: Resolve rs-ci root
+        shell: bash
+        run: |
+          if [ -n "${RS_CI_ROOT:-}" ]; then
+            [ -f "$RS_CI_ROOT/toolchains.sh" ] || { echo "Invalid RS_CI_ROOT: $RS_CI_ROOT" >&2; exit 1; }
+            rs_ci_root="$RS_CI_ROOT"
+          elif [ -f .infra/tools/rs-ci/toolchains.sh ]; then
+            rs_ci_root=.infra/tools/rs-ci
+          elif [ -f .rs-ci/toolchains.sh ]; then
+            rs_ci_root=.rs-ci
+          else
+            rs_ci_root=.
+          fi
+          echo "RS_CI_ROOT=$rs_ci_root" >> "$GITHUB_ENV"
+
       - name: Detect cargo-fuzz package
         id: fuzz
         run: |
           set -euo pipefail
-          if [ -x .rs-ci/cargo-fuzz-check.sh ]; then
-            CHECKER=.rs-ci/cargo-fuzz-check.sh
+          if [ -x $RS_CI_ROOT/cargo-fuzz-check.sh ]; then
+            CHECKER=$RS_CI_ROOT/cargo-fuzz-check.sh
           elif [ -x ./cargo-fuzz-check.sh ]; then
             CHECKER=./cargo-fuzz-check.sh
           else
@@ -444,8 +525,8 @@ jobs:
       - name: Run conditional cargo-fuzz smoke checks
         run: |
           set -euo pipefail
-          if [ -x .rs-ci/cargo-fuzz-check.sh ]; then
-            CHECKER=.rs-ci/cargo-fuzz-check.sh
+          if [ -x $RS_CI_ROOT/cargo-fuzz-check.sh ]; then
+            CHECKER=$RS_CI_ROOT/cargo-fuzz-check.sh
           else
             CHECKER=./cargo-fuzz-check.sh
           fi
@@ -477,12 +558,27 @@ jobs:
           fetch-depth: 1
           submodules: recursive
 
+      - name: Resolve rs-ci root
+        shell: bash
+        run: |
+          if [ -n "${RS_CI_ROOT:-}" ]; then
+            [ -f "$RS_CI_ROOT/toolchains.sh" ] || { echo "Invalid RS_CI_ROOT: $RS_CI_ROOT" >&2; exit 1; }
+            rs_ci_root="$RS_CI_ROOT"
+          elif [ -f .infra/tools/rs-ci/toolchains.sh ]; then
+            rs_ci_root=.infra/tools/rs-ci
+          elif [ -f .rs-ci/toolchains.sh ]; then
+            rs_ci_root=.rs-ci
+          else
+            rs_ci_root=.
+          fi
+          echo "RS_CI_ROOT=$rs_ci_root" >> "$GITHUB_ENV"
+
       - name: Detect Loom model tests
         id: loom
         run: |
           set -euo pipefail
-          if [ -x .rs-ci/cargo-loom-check.sh ]; then
-            CHECKER=.rs-ci/cargo-loom-check.sh
+          if [ -x $RS_CI_ROOT/cargo-loom-check.sh ]; then
+            CHECKER=$RS_CI_ROOT/cargo-loom-check.sh
           elif [ -x ./cargo-loom-check.sh ]; then
             CHECKER=./cargo-loom-check.sh
           else
@@ -503,8 +599,8 @@ jobs:
         if: ${{ steps.loom.outputs.enabled == 'true' }}
         run: |
           set -euo pipefail
-          if [ -x .rs-ci/cargo-loom-check.sh ]; then
-            CHECKER=.rs-ci/cargo-loom-check.sh
+          if [ -x $RS_CI_ROOT/cargo-loom-check.sh ]; then
+            CHECKER=$RS_CI_ROOT/cargo-loom-check.sh
           else
             CHECKER=./cargo-loom-check.sh
           fi
@@ -530,9 +626,24 @@ jobs:
           fetch-depth: 1
           submodules: recursive
 
+      - name: Resolve rs-ci root
+        shell: bash
+        run: |
+          if [ -n "${RS_CI_ROOT:-}" ]; then
+            [ -f "$RS_CI_ROOT/toolchains.sh" ] || { echo "Invalid RS_CI_ROOT: $RS_CI_ROOT" >&2; exit 1; }
+            rs_ci_root="$RS_CI_ROOT"
+          elif [ -f .infra/tools/rs-ci/toolchains.sh ]; then
+            rs_ci_root=.infra/tools/rs-ci
+          elif [ -f .rs-ci/toolchains.sh ]; then
+            rs_ci_root=.rs-ci
+          else
+            rs_ci_root=.
+          fi
+          echo "RS_CI_ROOT=$rs_ci_root" >> "$GITHUB_ENV"
+
       - name: Install jq when feature matrix exists
         run: |
-          if [ -f "$RS_CI_CARGO_MATRIX_CONFIG" ] && ! command -v jq > /dev/null 2>&1; then
+          if ! command -v jq > /dev/null 2>&1; then
             sudo apt-get update
             sudo apt-get install -y jq
           fi
@@ -541,23 +652,23 @@ jobs:
         id: matrix
         run: |
           set -euo pipefail
-          if [ ! -f "$RS_CI_CARGO_MATRIX_CONFIG" ]; then
+          if [ -x $RS_CI_ROOT/cargo-feature-check.sh ]; then
+            MATRIX_SCRIPT=$RS_CI_ROOT/cargo-feature-check.sh
+          elif [ -x ./cargo-feature-check.sh ]; then
+            MATRIX_SCRIPT=./cargo-feature-check.sh
+          else
+            if [ -n "$RS_CI_CARGO_MATRIX_CONFIG" ] || [ -f .infra/ci/cargo-matrix.json ] || [ -f .rs-ci-cargo-matrix.json ]; then
+              echo "Cargo compatibility matrix config exists, but cargo-feature-check.sh was not found" >&2
+              exit 1
+            fi
             matrix='{"include":[{"index":-1,"name":"no-configured-feature-matrix","enabled":false}]}'
             echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
             echo "has_matrix=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if [ -x .rs-ci/cargo-feature-check.sh ]; then
-            MATRIX_SCRIPT=.rs-ci/cargo-feature-check.sh
-          elif [ -x ./cargo-feature-check.sh ]; then
-            MATRIX_SCRIPT=./cargo-feature-check.sh
-          else
-            echo "Cargo compatibility matrix config exists, but cargo-feature-check.sh was not found" >&2
-            exit 1
-          fi
           matrix=$("$MATRIX_SCRIPT" github-matrix)
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-          echo "has_matrix=true" >> "$GITHUB_OUTPUT"
+          echo "has_matrix=$(jq -r '.include[0].enabled' <<< "$matrix")" >> "$GITHUB_OUTPUT"
 
   cargo_feature_matrix:
     name: Cargo compatibility matrix (${{ matrix.name }})
@@ -578,7 +689,7 @@ jobs:
     steps:
       - name: No configured Cargo compatibility matrix
         if: ${{ matrix.enabled == false }}
-        run: echo "No .rs-ci-cargo-matrix.json found; using the default CI behavior."
+        run: echo "No .infra/ci/cargo-matrix.json found; using the default CI behavior."
 
       - name: Checkout source
         if: ${{ matrix.enabled == true }}
@@ -586,6 +697,21 @@ jobs:
         with:
           fetch-depth: 1
           submodules: recursive
+
+      - name: Resolve rs-ci root
+        shell: bash
+        run: |
+          if [ -n "${RS_CI_ROOT:-}" ]; then
+            [ -f "$RS_CI_ROOT/toolchains.sh" ] || { echo "Invalid RS_CI_ROOT: $RS_CI_ROOT" >&2; exit 1; }
+            rs_ci_root="$RS_CI_ROOT"
+          elif [ -f .infra/tools/rs-ci/toolchains.sh ]; then
+            rs_ci_root=.infra/tools/rs-ci
+          elif [ -f .rs-ci/toolchains.sh ]; then
+            rs_ci_root=.rs-ci
+          else
+            rs_ci_root=.
+          fi
+          echo "RS_CI_ROOT=$rs_ci_root" >> "$GITHUB_ENV"
 
       - name: Restore cargo cache
         if: ${{ matrix.enabled == true }}
@@ -619,7 +745,7 @@ jobs:
 
       - name: Run configured Cargo compatibility check
         if: ${{ matrix.enabled == true }}
-        run: .rs-ci/cargo-feature-check.sh run-index "${{ matrix.index }}"
+        run: $RS_CI_ROOT/cargo-feature-check.sh run-index "${{ matrix.index }}"
 
   build_test_coverage:
     name: Build, test, and coverage
@@ -638,6 +764,21 @@ jobs:
         with:
           fetch-depth: 1
           submodules: recursive
+
+      - name: Resolve rs-ci root
+        shell: bash
+        run: |
+          if [ -n "${RS_CI_ROOT:-}" ]; then
+            [ -f "$RS_CI_ROOT/toolchains.sh" ] || { echo "Invalid RS_CI_ROOT: $RS_CI_ROOT" >&2; exit 1; }
+            rs_ci_root="$RS_CI_ROOT"
+          elif [ -f .infra/tools/rs-ci/toolchains.sh ]; then
+            rs_ci_root=.infra/tools/rs-ci
+          elif [ -f .rs-ci/toolchains.sh ]; then
+            rs_ci_root=.rs-ci
+          else
+            rs_ci_root=.
+          fi
+          echo "RS_CI_ROOT=$rs_ci_root" >> "$GITHUB_ENV"
 
       - name: Restore cargo cache
         uses: actions/cache@v5
@@ -678,8 +819,8 @@ jobs:
       - name: Check README dependency versions
         run: |
           set -euo pipefail
-          if [ -x .rs-ci/readme-version-check.py ]; then
-            RUSTUP_TOOLCHAIN="$RS_CI_BUILD_TOOLCHAIN" python3 .rs-ci/readme-version-check.py
+          if [ -x $RS_CI_ROOT/readme-version-check.py ]; then
+            RUSTUP_TOOLCHAIN="$RS_CI_BUILD_TOOLCHAIN" python3 $RS_CI_ROOT/readme-version-check.py
           elif [ -x ./readme-version-check.py ]; then
             RUSTUP_TOOLCHAIN="$RS_CI_BUILD_TOOLCHAIN" python3 ./readme-version-check.py
           else
@@ -690,8 +831,8 @@ jobs:
       - name: Run project-specific CI checks
         run: |
           set -euo pipefail
-          if [ -x .rs-ci/run-project-ci-check.sh ]; then
-            RS_CI_PROJECT_ROOT="$PWD" .rs-ci/run-project-ci-check.sh
+          if [ -x $RS_CI_ROOT/run-project-ci-check.sh ]; then
+            RS_CI_PROJECT_ROOT="$PWD" $RS_CI_ROOT/run-project-ci-check.sh
           elif [ -x ./run-project-ci-check.sh ]; then
             RS_CI_PROJECT_ROOT="$PWD" ./run-project-ci-check.sh
           elif [ -e ./project-ci-check.sh ]; then
@@ -712,8 +853,8 @@ jobs:
       - name: Verify Cargo package
         run: |
           set -euo pipefail
-          if [ -x .rs-ci/cargo-package-check.sh ]; then
-            RS_CI_PROJECT_ROOT="$PWD" .rs-ci/cargo-package-check.sh
+          if [ -x $RS_CI_ROOT/cargo-package-check.sh ]; then
+            RS_CI_PROJECT_ROOT="$PWD" $RS_CI_ROOT/cargo-package-check.sh
           elif [ -x ./cargo-package-check.sh ]; then
             RS_CI_PROJECT_ROOT="$PWD" ./cargo-package-check.sh
           else
@@ -881,6 +1022,21 @@ jobs:
           fetch-depth: 1
           submodules: recursive
 
+      - name: Resolve rs-ci root
+        shell: bash
+        run: |
+          if [ -n "${RS_CI_ROOT:-}" ]; then
+            [ -f "$RS_CI_ROOT/toolchains.sh" ] || { echo "Invalid RS_CI_ROOT: $RS_CI_ROOT" >&2; exit 1; }
+            rs_ci_root="$RS_CI_ROOT"
+          elif [ -f .infra/tools/rs-ci/toolchains.sh ]; then
+            rs_ci_root=.infra/tools/rs-ci
+          elif [ -f .rs-ci/toolchains.sh ]; then
+            rs_ci_root=.rs-ci
+          else
+            rs_ci_root=.
+          fi
+          echo "RS_CI_ROOT=$rs_ci_root" >> "$GITHUB_ENV"
+
       - name: Download coverage artifacts
         uses: actions/download-artifact@v8
         with:
@@ -890,8 +1046,8 @@ jobs:
       - name: Build Pages site
         run: |
           set -euo pipefail
-          if [ -f .rs-ci/page/build-pages.mjs ]; then
-            PAGE_BUILDER=.rs-ci/page/build-pages.mjs
+          if [ -f $RS_CI_ROOT/page/build-pages.mjs ]; then
+            PAGE_BUILDER=$RS_CI_ROOT/page/build-pages.mjs
           else
             PAGE_BUILDER=page/build-pages.mjs
           fi
@@ -940,6 +1096,21 @@ jobs:
           fetch-depth: 1
           submodules: recursive
 
+      - name: Resolve rs-ci root
+        shell: bash
+        run: |
+          if [ -n "${RS_CI_ROOT:-}" ]; then
+            [ -f "$RS_CI_ROOT/toolchains.sh" ] || { echo "Invalid RS_CI_ROOT: $RS_CI_ROOT" >&2; exit 1; }
+            rs_ci_root="$RS_CI_ROOT"
+          elif [ -f .infra/tools/rs-ci/toolchains.sh ]; then
+            rs_ci_root=.infra/tools/rs-ci
+          elif [ -f .rs-ci/toolchains.sh ]; then
+            rs_ci_root=.rs-ci
+          else
+            rs_ci_root=.
+          fi
+          echo "RS_CI_ROOT=$rs_ci_root" >> "$GITHUB_ENV"
+
       - name: Restore cargo cache
         uses: actions/cache@v5
         with:
@@ -982,6 +1153,21 @@ jobs:
         with:
           fetch-depth: 1
           submodules: recursive
+
+      - name: Resolve rs-ci root
+        shell: bash
+        run: |
+          if [ -n "${RS_CI_ROOT:-}" ]; then
+            [ -f "$RS_CI_ROOT/toolchains.sh" ] || { echo "Invalid RS_CI_ROOT: $RS_CI_ROOT" >&2; exit 1; }
+            rs_ci_root="$RS_CI_ROOT"
+          elif [ -f .infra/tools/rs-ci/toolchains.sh ]; then
+            rs_ci_root=.infra/tools/rs-ci
+          elif [ -f .rs-ci/toolchains.sh ]; then
+            rs_ci_root=.rs-ci
+          else
+            rs_ci_root=.
+          fi
+          echo "RS_CI_ROOT=$rs_ci_root" >> "$GITHUB_ENV"
 
       - name: Restore cargo cache
         uses: actions/cache@v5
@@ -1048,6 +1234,21 @@ jobs:
         with:
           fetch-depth: 1
           submodules: recursive
+
+      - name: Resolve rs-ci root
+        shell: bash
+        run: |
+          if [ -n "${RS_CI_ROOT:-}" ]; then
+            [ -f "$RS_CI_ROOT/toolchains.sh" ] || { echo "Invalid RS_CI_ROOT: $RS_CI_ROOT" >&2; exit 1; }
+            rs_ci_root="$RS_CI_ROOT"
+          elif [ -f .infra/tools/rs-ci/toolchains.sh ]; then
+            rs_ci_root=.infra/tools/rs-ci
+          elif [ -f .rs-ci/toolchains.sh ]; then
+            rs_ci_root=.rs-ci
+          else
+            rs_ci_root=.
+          fi
+          echo "RS_CI_ROOT=$rs_ci_root" >> "$GITHUB_ENV"
 
       - name: Restore cargo cache
         uses: actions/cache@v5
@@ -1116,6 +1317,21 @@ jobs:
         with:
           fetch-depth: 1
           submodules: recursive
+
+      - name: Resolve rs-ci root
+        shell: bash
+        run: |
+          if [ -n "${RS_CI_ROOT:-}" ]; then
+            [ -f "$RS_CI_ROOT/toolchains.sh" ] || { echo "Invalid RS_CI_ROOT: $RS_CI_ROOT" >&2; exit 1; }
+            rs_ci_root="$RS_CI_ROOT"
+          elif [ -f .infra/tools/rs-ci/toolchains.sh ]; then
+            rs_ci_root=.infra/tools/rs-ci
+          elif [ -f .rs-ci/toolchains.sh ]; then
+            rs_ci_root=.rs-ci
+          else
+            rs_ci_root=.
+          fi
+          echo "RS_CI_ROOT=$rs_ci_root" >> "$GITHUB_ENV"
 
       - name: Restore cargo cache
         uses: actions/cache@v5
