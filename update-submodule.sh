@@ -40,7 +40,13 @@ require_command() {
     fi
 }
 
-PROJECT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+if PROJECT_ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-superproject-working-tree 2>/dev/null) \
+    && [ -n "$PROJECT_ROOT" ]; then
+    : # The script is running from a submodule inside a consuming project.
+else
+    PROJECT_ROOT="$SCRIPT_DIR"
+fi
 cd "$PROJECT_ROOT"
 
 shallow=0
