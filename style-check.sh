@@ -68,7 +68,7 @@ print_usage() {
     echo "  STYLE_TYPE_VISIBILITY=${STYLE_TYPE_VISIBILITY}      # public or all"
     echo "  STYLE_INCLUDE_TYPE_ALIASES=${STYLE_INCLUDE_TYPE_ALIASES}"
     echo "  STYLE_EXTRA_EXCLUDE_REGEX=${STYLE_EXTRA_EXCLUDE_REGEX}"
-    echo "  STYLE_ALLOWLIST_FILE=${STYLE_ALLOWLIST_FILE:-<project root>/.qubit-style-allowlist}"
+    echo "  STYLE_ALLOWLIST_FILE=${STYLE_ALLOWLIST_FILE:-<project root>/.infra/ci/style-allowlist}"
     echo "  STYLE_SKIP_TYPE_PATH_REGEX=${STYLE_SKIP_TYPE_PATH_REGEX}"
     echo "  STYLE_SKIP_SOURCE_TEST_PAIR_PATH_REGEX=${STYLE_SKIP_SOURCE_TEST_PAIR_PATH_REGEX}"
     echo "  STYLE_TEST_SUPPORT_DIR_REGEX=${STYLE_TEST_SUPPORT_DIR_REGEX}"
@@ -250,11 +250,16 @@ main() {
 
     # shellcheck source=project-root.sh
     source "$script_dir/project-root.sh"
+    # shellcheck source=config-path.sh
+    source "$script_dir/config-path.sh"
     PROJECT_ROOT=$(rs_ci_project_root "$script_dir")
     # Resolve symlinks so paths from cargo metadata and find share one root.
     PROJECT_ROOT=$(cd "$PROJECT_ROOT" && pwd -P)
     if [ -z "$STYLE_ALLOWLIST_FILE" ]; then
-        STYLE_ALLOWLIST_FILE="$PROJECT_ROOT/.qubit-style-allowlist"
+        STYLE_ALLOWLIST_FILE=$(rs_ci_config_path \
+            "$PROJECT_ROOT" \
+            ".infra/ci/style-allowlist" \
+            ".qubit-style-allowlist")
     fi
     cd "$PROJECT_ROOT"
 

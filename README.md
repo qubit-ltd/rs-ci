@@ -447,7 +447,7 @@ are defined in `toolchains.sh`.
 - `STYLE_TYPE_VISIBILITY`: type declarations checked by file layout rules, either `public` or `all`; defaults to `public`.
 - `STYLE_INCLUDE_TYPE_ALIASES`: set to `1` to include public `type` aliases in file layout checks; defaults to `0`.
 - `STYLE_EXTRA_EXCLUDE_REGEX`: extra regex for files skipped by `style-check.sh`.
-- `STYLE_ALLOWLIST_FILE`: project-level reviewed style exception allowlist; defaults to `<project-root>/.qubit-style-allowlist`.
+- `STYLE_ALLOWLIST_FILE`: project-level reviewed style exception allowlist; defaults to `<project-root>/.infra/ci/style-allowlist`. The legacy `<project-root>/.qubit-style-allowlist` is read with a deprecation warning during migration.
 - `COVERAGE_ENFORCE_THRESHOLDS`: must stay `1` in rs-ci scripts and CI templates; defaults to `1`. Disabling thresholds is rejected unless `RS_CI_ALLOW_DISABLED_COVERAGE_THRESHOLDS=1` for rs-ci policy tests only.
 - `COVERAGE_SCOPE`: overrides the configured coverage scope with `default-members`, `workspace`, or `package`.
 - `RS_CI_COVERAGE_CONFIG`: project-relative or absolute path to the optional coverage config; defaults to `.infra/ci/coverage.json`.

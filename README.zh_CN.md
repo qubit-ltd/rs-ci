@@ -406,7 +406,7 @@ Cargo 命令之前拒绝浮动的 `nightly`，共享默认值统一定义在 `to
 - `STYLE_TYPE_VISIBILITY`：文件布局规则检查的类型声明范围，可选 `public` 或 `all`；默认是 `public`。
 - `STYLE_INCLUDE_TYPE_ALIASES`：设为 `1` 时把公开 `type` 别名也纳入文件布局检查；默认是 `0`。
 - `STYLE_EXTRA_EXCLUDE_REGEX`：追加给 `style-check.sh` 的文件排除正则。
-- `STYLE_ALLOWLIST_FILE`：项目级已审核风格例外白名单；默认是 `<project-root>/.qubit-style-allowlist`。
+- `STYLE_ALLOWLIST_FILE`：项目级已审核风格例外白名单；默认是 `<project-root>/.infra/ci/style-allowlist`。迁移期间仍会读取旧的 `<project-root>/.qubit-style-allowlist`，并输出弃用警告。
 - `COVERAGE_ENFORCE_THRESHOLDS`：rs-ci 脚本和 CI 模板中必须保持为 `1`；默认是 `1`。除非在 rs-ci 策略测试里同时设置 `RS_CI_ALLOW_DISABLED_COVERAGE_THRESHOLDS=1`，否则不允许关闭阈值检查。
 - `COVERAGE_SCOPE`：覆盖配置文件中的范围，可选 `default-members`、`workspace` 或 `package`。
 - `RS_CI_COVERAGE_CONFIG`：可选 coverage 配置的项目相对或绝对路径；默认是 `.infra/ci/coverage.json`。
